@@ -4,12 +4,9 @@ import * as THREE from 'three'
 import { createBaseballMaterial } from '../lib/baseballVisuals'
 import type { SimulationInputs, SimulationSnapshot, Vec3 } from '../lib/simulation'
 
-const FLOW_LOW_COLOR = new THREE.Color('#38bdf8')
-const FLOW_HIGH_COLOR = new THREE.Color('#fb923c')
 const FORCE_LOW_COLOR = new THREE.Color('#67e8f9')
 const FORCE_HIGH_COLOR = new THREE.Color('#f59e0b')
 const CAMERA_HEIGHT = 5.6
-const SPIN_CUE_RADIUS = 1.18
 
 const CLOCK_MARKERS = Array.from({ length: 12 }, (_, index) => {
   const hour = index === 0 ? 12 : index
@@ -33,18 +30,6 @@ interface SpinLabState {
   spinAxis: THREE.Vector3
   spinRateRpm: number
   speedMph: number
-}
-
-interface FlowPath {
-  points: THREE.Vector3[]
-  colors: THREE.Color[]
-}
-
-interface ParticleBinding {
-  mesh: THREE.Mesh
-  path: THREE.Vector3[]
-  offset: number
-  speed: number
 }
 
 function SpinLabScene(props: SpinLabSceneProps) {
@@ -155,23 +140,10 @@ class SpinLabSceneController {
   private readonly ballMesh: THREE.Mesh
   private readonly spinAxisLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   private readonly forceArrow: THREE.ArrowHelper
-  private readonly spinCueRing: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>
-  private readonly spinCueTracer: THREE.Mesh<
-    THREE.SphereGeometry,
-    THREE.MeshBasicMaterial
-  >
-  private readonly flowGroup = new THREE.Group()
-  private readonly particleGeometry = new THREE.SphereGeometry(0.03, 16, 16)
-  private readonly particleMaterial = new THREE.MeshBasicMaterial({
-    color: 0x38bdf8,
-    transparent: true,
-    opacity: 0.68,
-  })
   private readonly coreGlow: THREE.Mesh
   private animationFrame = 0
   private targetState: SpinLabState | undefined
   private currentState: SpinLabState | undefined
-  private particleBindings: ParticleBinding[] = []
 
   constructor(container: HTMLDivElement, canvas: HTMLCanvasElement) {
     this.container = container
@@ -218,15 +190,6 @@ class SpinLabSceneController {
       0.28,
       0.16,
     )
-    this.spinCueRing = this.createSpinCueRing()
-    this.spinCueTracer = new THREE.Mesh(
-      new THREE.SphereGeometry(0.06, 18, 18),
-      new THREE.MeshBasicMaterial({
-        color: 0x7dd3fc,
-        transparent: true,
-        opacity: 0.88,
-      }),
-    )
     this.coreGlow = new THREE.Mesh(
       new THREE.CircleGeometry(0.94, 64),
       new THREE.MeshBasicMaterial({
@@ -258,8 +221,6 @@ class SpinLabSceneController {
     if (!this.currentState) {
       this.currentState = cloneLabState(nextState)
     }
-
-    this.rebuildFlowVisualization(nextState)
   }
 
   dispose() {
@@ -276,13 +237,6 @@ class SpinLabSceneController {
 
     this.spinAxisLine.geometry.dispose()
     this.spinAxisLine.material.dispose()
-    this.spinCueRing.geometry.dispose()
-    this.spinCueRing.material.dispose()
-    this.spinCueTracer.geometry.dispose()
-    this.spinCueTracer.material.dispose()
-    this.particleGeometry.dispose()
-    this.particleMaterial.dispose()
-    this.clearFlowGroup()
     this.renderer.dispose()
   }
 
@@ -328,11 +282,8 @@ class SpinLabSceneController {
 
     this.scene.add(ambient, key, rim)
     this.scene.add(frame, lane, this.coreGlow)
-    this.scene.add(this.flowGroup)
     this.scene.add(this.ballGroup)
     this.scene.add(this.forceArrow)
-    this.scene.add(this.spinCueRing)
-    this.scene.add(this.spinCueTracer)
   }
 
   private resize() {
@@ -354,7 +305,6 @@ class SpinLabSceneController {
   private renderFrame(now: number) {
     this.animationFrame = requestAnimationFrame(this.renderFrame)
     this.updateState(now)
-    this.updateParticles(now)
     this.renderer.render(this.scene, this.camera)
   }
 
@@ -411,185 +361,12 @@ class SpinLabSceneController {
     this.forceArrow.setDirection(forceDirection)
     this.forceArrow.setLength(0.38 + forceMagnitude * 1.95, 0.26, 0.14)
     this.forceArrow.setColor(arrowColor)
-    this.updateSpinCue(now)
 
     const glowMaterial = this.coreGlow.material
     if (!Array.isArray(glowMaterial)) {
       glowMaterial.opacity = 0.05 + clamp01(forceMagnitude / 1.2) * 0.08
     }
   }
-
-  private createSpinCueRing() {
-    const points: THREE.Vector3[] = []
-
-    for (let index = 0; index < 72; index += 1) {
-      const angle = (index / 72) * Math.PI * 2
-      points.push(
-        new THREE.Vector3(
-          0,
-          Math.cos(angle) * SPIN_CUE_RADIUS,
-          Math.sin(angle) * SPIN_CUE_RADIUS,
-        ),
-      )
-    }
-
-    return new THREE.LineLoop(
-      new THREE.BufferGeometry().setFromPoints(points),
-      new THREE.LineBasicMaterial({
-        color: 0x0f172a,
-        transparent: true,
-        opacity: 0.12,
-      }),
-    )
-  }
-
-  private updateSpinCue(now: number) {
-    if (!this.currentState) {
-      return
-    }
-
-    const visibleSpin = clamp01(Math.hypot(this.currentState.spinAxis.y, this.currentState.spinAxis.z))
-    this.spinCueRing.material.opacity = 0.12 + visibleSpin * 0.26
-    this.spinCueTracer.material.opacity = 0.22 + visibleSpin * 0.7
-    this.spinCueTracer.scale.setScalar(0.84 + visibleSpin * 0.34)
-
-    const directionSeed =
-      Math.sign(this.currentState.spinAxis.x) ||
-      Math.sign(this.currentState.magnusForce.y) ||
-      1
-    const direction = directionSeed >= 0 ? -1 : 1
-    const cueRps = 0.18 + visibleSpin * 0.46
-    const angle = Math.PI / 2 + direction * (now / 1000) * cueRps * Math.PI * 2
-
-    this.spinCueTracer.position.set(
-      0,
-      Math.cos(angle) * SPIN_CUE_RADIUS,
-      Math.sin(angle) * SPIN_CUE_RADIUS,
-    )
-  }
-
-  private rebuildFlowVisualization(state: SpinLabState) {
-    this.clearFlowGroup()
-    const paths = buildFlowPaths(state)
-
-    paths.forEach((path, index) => {
-      if (path.points.length < 2) {
-        return
-      }
-
-      const positions = new Float32Array(path.points.length * 3)
-      const colors = new Float32Array(path.points.length * 3)
-
-      path.points.forEach((point, pointIndex) => {
-        positions[pointIndex * 3] = point.x
-        positions[pointIndex * 3 + 1] = point.y
-        positions[pointIndex * 3 + 2] = point.z
-        colors[pointIndex * 3] = path.colors[pointIndex].r
-        colors[pointIndex * 3 + 1] = path.colors[pointIndex].g
-        colors[pointIndex * 3 + 2] = path.colors[pointIndex].b
-      })
-
-      const geometry = new THREE.BufferGeometry()
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-      const material = new THREE.LineBasicMaterial({
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.72,
-      })
-      const line = new THREE.Line(geometry, material)
-      this.flowGroup.add(line)
-
-      if (index % 2 === 0) {
-        const particle = new THREE.Mesh(this.particleGeometry, this.particleMaterial.clone())
-        this.flowGroup.add(particle)
-        this.particleBindings.push({
-          mesh: particle,
-          path: path.points,
-          offset: index * 0.09,
-          speed: 0.45 + (index % 3) * 0.08,
-        })
-      }
-    })
-  }
-
-  private clearFlowGroup() {
-    this.flowGroup.children.forEach((child) => {
-      const drawable = child as THREE.Line | THREE.Mesh
-      if ('geometry' in drawable && drawable.geometry !== this.particleGeometry) {
-        drawable.geometry.dispose()
-      }
-      if ('material' in drawable) {
-        const material = drawable.material
-        if (Array.isArray(material)) {
-          material.forEach((entry) => entry.dispose())
-        } else {
-          material.dispose()
-        }
-      }
-    })
-
-    this.flowGroup.clear()
-    this.particleBindings = []
-  }
-
-  private updateParticles(now: number) {
-    this.particleBindings.forEach((binding, index) => {
-      const t = (now * 0.00012 * binding.speed + binding.offset + index * 0.06) % 1
-      binding.mesh.position.copy(sampleVectorPath(binding.path, t))
-    })
-  }
-}
-
-function buildFlowPaths(state: SpinLabState): FlowPath[] {
-  const directionSeed = Math.sign(state.spinAxis.x) || Math.sign(state.magnusForce.y) || 1
-  const direction = directionSeed >= 0 ? 1 : -1
-  const amplitude = 0.12 + clamp01(state.magnusForce.length() / 1.2) * 0.78
-  const rings = [1.42, 1.7, 1.98]
-  const paths: FlowPath[] = []
-
-  rings.forEach((radius, ringIndex) => {
-    const points: THREE.Vector3[] = []
-    const colors: THREE.Color[] = []
-
-    for (let step = 0; step <= 90; step += 1) {
-      const t = step / 90
-      const angle = -Math.PI * 0.82 + direction * t * Math.PI * 1.64
-      const wobble = Math.sin(t * Math.PI * 2 + ringIndex * 0.7) * 0.05 * amplitude
-      const y = Math.cos(angle) * (radius + wobble)
-      const z = Math.sin(angle) * (radius + wobble)
-      points.push(new THREE.Vector3(0, y, z))
-      colors.push(colorForFlow(0.78 + amplitude + ringIndex * 0.08, z))
-    }
-
-    if (points.length > 1) {
-      paths.push({ points, colors })
-    }
-  })
-
-  return paths
-}
-
-function colorForFlow(speed: number, y: number): THREE.Color {
-  const speedRatio = clamp01((speed - 0.72) / 1.05)
-  const bandAccent = clamp01(Math.abs(y) / 1.8) * 0.14
-
-  return FLOW_LOW_COLOR.clone()
-    .lerp(FLOW_HIGH_COLOR, speedRatio)
-    .lerp(new THREE.Color('#fef3c7'), bandAccent)
-}
-
-function sampleVectorPath(path: THREE.Vector3[], t: number): THREE.Vector3 {
-  if (path.length === 1) {
-    return path[0].clone()
-  }
-
-  const maxIndex = path.length - 1
-  const scaled = clamp01(t) * maxIndex
-  const index = Math.min(Math.floor(scaled), maxIndex - 1)
-  const ratio = scaled - index
-
-  return path[index].clone().lerp(path[index + 1], ratio)
 }
 
 function cloneLabState(state: SpinLabState): SpinLabState {

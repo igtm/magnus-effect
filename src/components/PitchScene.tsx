@@ -76,6 +76,10 @@ class PitchSceneController {
   private readonly velocityArrow: THREE.ArrowHelper
   private readonly magnusArrow: THREE.ArrowHelper
   private readonly zoneBox: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>
+  private readonly zoneGrid: THREE.LineSegments<
+    THREE.BufferGeometry,
+    THREE.LineBasicMaterial
+  >
   private readonly guideFan: THREE.LineSegments<
     THREE.BufferGeometry,
     THREE.LineBasicMaterial
@@ -143,6 +147,7 @@ class PitchSceneController {
     )
 
     this.zoneBox = this.createStrikeZone()
+    this.zoneGrid = this.createStrikeZoneGrid()
     this.guideFan = this.createGuideFan()
 
     this.setupScene()
@@ -191,6 +196,8 @@ class PitchSceneController {
 
     this.zoneBox.geometry.dispose()
     this.zoneBox.material.dispose()
+    this.zoneGrid.geometry.dispose()
+    this.zoneGrid.material.dispose()
     this.guideFan.geometry.dispose()
     this.guideFan.material.dispose()
     this.renderer.dispose()
@@ -240,7 +247,7 @@ class PitchSceneController {
     this.ballGroup.add(this.spinAxisLine)
 
     this.scene.add(ambient, hemisphere, key, rim)
-    this.scene.add(ground, lane, leftBox, rightBox, plate, this.zoneBox, this.guideFan)
+    this.scene.add(ground, lane, leftBox, rightBox, plate, this.zoneBox, this.zoneGrid, this.guideFan)
     this.scene.add(this.releaseGlow)
     this.scene.add(this.ballGroup)
     this.scene.add(this.velocityArrow)
@@ -250,13 +257,13 @@ class PitchSceneController {
   private createBallMesh() {
     const material = createBaseballMaterial(this.renderer.capabilities.getMaxAnisotropy())
 
-    return new THREE.Mesh(new THREE.SphereGeometry(0.15, 64, 64), material)
+    return new THREE.Mesh(new THREE.SphereGeometry(0.055, 64, 64), material)
   }
 
   private createSpinAxisLine() {
     const geometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-0.26, 0, 0),
-      new THREE.Vector3(0.26, 0, 0),
+      new THREE.Vector3(-0.11, 0, 0),
+      new THREE.Vector3(0.11, 0, 0),
     ])
     const material = new THREE.LineBasicMaterial({
       color: 0x0f172a,
@@ -268,7 +275,7 @@ class PitchSceneController {
   }
 
   private createReleaseGlow() {
-    const geometry = new THREE.RingGeometry(0.13, 0.19, 48)
+    const geometry = new THREE.RingGeometry(0.06, 0.085, 48)
     const material = new THREE.MeshBasicMaterial({
       color: 0x94a3b8,
       transparent: true,
@@ -295,6 +302,33 @@ class PitchSceneController {
     zone.position.set(18.44, 0, 0.76)
 
     return zone
+  }
+
+  private createStrikeZoneGrid() {
+    const zoneCenterX = 18.44 + 0.076
+    const zoneHalfWidth = 0.215
+    const zoneHalfHeight = 0.33
+    const horizontalStep = (zoneHalfHeight * 2) / 3
+    const verticalStep = (zoneHalfWidth * 2) / 3
+    const points = [
+      new THREE.Vector3(zoneCenterX, -zoneHalfWidth + verticalStep, 0.76 - zoneHalfHeight),
+      new THREE.Vector3(zoneCenterX, -zoneHalfWidth + verticalStep, 0.76 + zoneHalfHeight),
+      new THREE.Vector3(zoneCenterX, -zoneHalfWidth + verticalStep * 2, 0.76 - zoneHalfHeight),
+      new THREE.Vector3(zoneCenterX, -zoneHalfWidth + verticalStep * 2, 0.76 + zoneHalfHeight),
+      new THREE.Vector3(zoneCenterX, -zoneHalfWidth, 0.76 - zoneHalfHeight + horizontalStep),
+      new THREE.Vector3(zoneCenterX, zoneHalfWidth, 0.76 - zoneHalfHeight + horizontalStep),
+      new THREE.Vector3(zoneCenterX, -zoneHalfWidth, 0.76 - zoneHalfHeight + horizontalStep * 2),
+      new THREE.Vector3(zoneCenterX, zoneHalfWidth, 0.76 - zoneHalfHeight + horizontalStep * 2),
+    ]
+
+    return new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({
+        color: 0x111827,
+        transparent: true,
+        opacity: 0.58,
+      }),
+    )
   }
 
   private createGuideFan() {
