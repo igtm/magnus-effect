@@ -1,6 +1,5 @@
 import { createEffect, onCleanup, onMount } from 'solid-js'
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 import { createBaseballMaterial } from '../lib/baseballVisuals'
 import type { SimulationInputs, SimulationSnapshot, TrajectorySample, Vec3 } from '../lib/simulation'
@@ -54,11 +53,11 @@ function PitchScene(props: PitchSceneProps) {
   return (
     <div
       ref={containerRef}
-      class="pitch-scene relative h-full min-h-[30rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[#061320]"
+      class="pitch-scene relative h-full min-h-[30rem] overflow-hidden rounded-[2rem] border border-black/10 bg-[#f4f5f7] xl:min-h-0"
     >
       <canvas ref={canvasRef} class="size-full" />
-      <div class="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#04101d]/80 to-transparent" />
-      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#04101d]/90 via-[#04101d]/10 to-transparent" />
+      <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/80 to-transparent" />
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-slate-300/78 via-slate-300/18 to-transparent" />
     </div>
   )
 }
@@ -68,7 +67,6 @@ class PitchSceneController {
   private readonly renderer: THREE.WebGLRenderer
   private readonly scene: THREE.Scene
   private readonly camera: THREE.PerspectiveCamera
-  private readonly controls: OrbitControls
   private readonly resizeObserver: ResizeObserver
   private readonly trajectoryMaterial: THREE.MeshPhysicalMaterial
   private readonly ballGroup: THREE.Group
@@ -78,6 +76,10 @@ class PitchSceneController {
   private readonly velocityArrow: THREE.ArrowHelper
   private readonly magnusArrow: THREE.ArrowHelper
   private readonly zoneBox: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>
+  private readonly guideFan: THREE.LineSegments<
+    THREE.BufferGeometry,
+    THREE.LineBasicMaterial
+  >
   private readonly releaseGlowMaterial: THREE.MeshBasicMaterial
   private animationFrame = 0
   private morphStartTime = 0
@@ -90,9 +92,10 @@ class PitchSceneController {
   constructor(container: HTMLDivElement, canvas: HTMLCanvasElement) {
     this.container = container
     this.scene = new THREE.Scene()
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 80)
-    this.camera.position.set(-1.8, -7.2, 4.2)
+    this.camera = new THREE.PerspectiveCamera(24, 1, 0.1, 80)
+    this.camera.position.set(20.9, 0, 1.18)
     this.camera.up.set(0, 0, 1)
+    this.camera.lookAt(10.6, 0, 1.06)
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -104,15 +107,6 @@ class PitchSceneController {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.2
-
-    this.controls = new OrbitControls(this.camera, canvas)
-    this.controls.enableDamping = true
-    this.controls.enablePan = false
-    this.controls.minDistance = 9
-    this.controls.maxDistance = 18
-    this.controls.minPolarAngle = Math.PI / 5
-    this.controls.maxPolarAngle = Math.PI / 2.1
-    this.controls.target.set(12.5, 0, 0.95)
 
     this.trajectoryMaterial = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color(FORCE_LOW_COLOR),
@@ -149,6 +143,7 @@ class PitchSceneController {
     )
 
     this.zoneBox = this.createStrikeZone()
+    this.guideFan = this.createGuideFan()
 
     this.setupScene()
     this.resizeObserver = new ResizeObserver(() => this.resize())
@@ -177,7 +172,6 @@ class PitchSceneController {
   dispose() {
     cancelAnimationFrame(this.animationFrame)
     this.resizeObserver.disconnect()
-    this.controls.dispose()
     this.trajectoryMesh?.geometry.dispose()
     this.trajectoryMaterial.dispose()
     this.ballMesh.geometry.dispose()
@@ -197,27 +191,27 @@ class PitchSceneController {
 
     this.zoneBox.geometry.dispose()
     this.zoneBox.material.dispose()
+    this.guideFan.geometry.dispose()
+    this.guideFan.material.dispose()
     this.renderer.dispose()
   }
 
   private setupScene() {
-    this.scene.fog = new THREE.FogExp2(0x040b14, 0.024)
+    this.scene.fog = new THREE.FogExp2(0xf3f4f6, 0.015)
 
-    const ambient = new THREE.AmbientLight(0x8ec4ff, 0.5)
-    const hemisphere = new THREE.HemisphereLight(0xb5d8ff, 0x03101d, 1.2)
-    const key = new THREE.DirectionalLight(0xeef6ff, 2.4)
-    key.position.set(-6, -4, 8)
-    const rim = new THREE.DirectionalLight(0x48b4ff, 1.4)
-    rim.position.set(10, 7, 4)
+    const ambient = new THREE.AmbientLight(0xffffff, 1.25)
+    const hemisphere = new THREE.HemisphereLight(0xffffff, 0xd4d4d8, 1.15)
+    const key = new THREE.DirectionalLight(0xffffff, 1.8)
+    key.position.set(-6.5, -3.2, 9.4)
+    const rim = new THREE.DirectionalLight(0xdbeafe, 0.72)
+    rim.position.set(10, 4.5, 5.2)
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(28, 16, 1, 1),
       new THREE.MeshStandardMaterial({
-        color: 0x07111d,
-        roughness: 0.95,
-        metalness: 0.05,
-        transparent: true,
-        opacity: 0.96,
+        color: 0xcfcfd2,
+        roughness: 0.98,
+        metalness: 0.02,
       }),
     )
     ground.position.set(9.2, 0, -0.01)
@@ -229,40 +223,24 @@ class PitchSceneController {
         new THREE.Vector3(18.44, 0, 0.01),
       ]),
       new THREE.LineDashedMaterial({
-        color: 0x1f4d74,
+        color: 0xffffff,
         dashSize: 0.38,
         gapSize: 0.22,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.34,
       }),
     )
     lane.computeLineDistances()
 
-    const sideLane = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 1.1, 0.01),
-        new THREE.Vector3(18.44, 1.1, 0.01),
-      ]),
-      new THREE.LineDashedMaterial({
-        color: 0x11314d,
-        dashSize: 0.28,
-        gapSize: 0.18,
-        transparent: true,
-        opacity: 0.35,
-      }),
-    )
-    sideLane.computeLineDistances()
-
-    const mirroredLane = sideLane.clone()
-    mirroredLane.position.y = -2.2
-
+    const leftBox = this.createBatterBox(-0.98)
+    const rightBox = this.createBatterBox(0.98)
     const plate = this.createHomePlate()
 
     this.ballGroup.add(this.ballMesh)
     this.ballGroup.add(this.spinAxisLine)
 
     this.scene.add(ambient, hemisphere, key, rim)
-    this.scene.add(ground, lane, sideLane, mirroredLane, plate, this.zoneBox)
+    this.scene.add(ground, lane, leftBox, rightBox, plate, this.zoneBox, this.guideFan)
     this.scene.add(this.releaseGlow)
     this.scene.add(this.ballGroup)
     this.scene.add(this.velocityArrow)
@@ -281,9 +259,9 @@ class PitchSceneController {
       new THREE.Vector3(0.26, 0, 0),
     ])
     const material = new THREE.LineBasicMaterial({
-      color: 0x8ce7ff,
+      color: 0x0f172a,
       transparent: true,
-      opacity: 0.88,
+      opacity: 0.4,
     })
 
     return new THREE.Line(geometry, material)
@@ -292,9 +270,9 @@ class PitchSceneController {
   private createReleaseGlow() {
     const geometry = new THREE.RingGeometry(0.13, 0.19, 48)
     const material = new THREE.MeshBasicMaterial({
-      color: 0x70d7ff,
+      color: 0x94a3b8,
       transparent: true,
-      opacity: 0.44,
+      opacity: 0.34,
       side: THREE.DoubleSide,
     })
     const mesh = new THREE.Mesh(geometry, material)
@@ -309,14 +287,59 @@ class PitchSceneController {
     const zone = new THREE.LineSegments(
       edges,
       new THREE.LineBasicMaterial({
-        color: 0x8ab4d8,
+        color: 0x111827,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.88,
       }),
     )
     zone.position.set(18.44, 0, 0.76)
 
     return zone
+  }
+
+  private createGuideFan() {
+    const release = new THREE.Vector3(0, 0, 1.85)
+    const zoneCenterX = 18.44
+    const zoneHalfWidth = 0.215
+    const zoneHalfHeight = 0.33
+    const points = [
+      release,
+      new THREE.Vector3(zoneCenterX, -zoneHalfWidth, 0.76 - zoneHalfHeight),
+      release,
+      new THREE.Vector3(zoneCenterX, zoneHalfWidth, 0.76 - zoneHalfHeight),
+      release,
+      new THREE.Vector3(zoneCenterX, -zoneHalfWidth, 0.76 + zoneHalfHeight),
+      release,
+      new THREE.Vector3(zoneCenterX, zoneHalfWidth, 0.76 + zoneHalfHeight),
+    ]
+
+    return new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({
+        color: 0x94a3b8,
+        transparent: true,
+        opacity: 0.22,
+      }),
+    )
+  }
+
+  private createBatterBox(yCenter: number) {
+    const points = [
+      new THREE.Vector3(18.86, yCenter - 0.47, 0.02),
+      new THREE.Vector3(20.26, yCenter - 0.47, 0.02),
+      new THREE.Vector3(20.26, yCenter + 0.47, 0.02),
+      new THREE.Vector3(18.86, yCenter + 0.47, 0.02),
+      new THREE.Vector3(18.86, yCenter - 0.47, 0.02),
+    ]
+
+    return new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.92,
+      }),
+    )
   }
 
   private createHomePlate() {
@@ -332,9 +355,9 @@ class PitchSceneController {
 
     const geometry = new THREE.ShapeGeometry(shape)
     const material = new THREE.MeshBasicMaterial({
-      color: 0xf8fafc,
+      color: 0xffffff,
       transparent: true,
-      opacity: 0.86,
+      opacity: 0.98,
       side: THREE.DoubleSide,
     })
     const mesh = new THREE.Mesh(geometry, material)
@@ -357,7 +380,6 @@ class PitchSceneController {
 
   private renderFrame(now: number) {
     this.animationFrame = requestAnimationFrame(this.renderFrame)
-    this.controls.update()
     this.updateMorph(now)
     this.updateBall(now)
     this.releaseGlowMaterial.opacity = 0.32 + Math.sin(now * 0.004) * 0.08
@@ -415,7 +437,8 @@ class PitchSceneController {
     )
     this.trajectoryMaterial.color.copy(state.tubeColor)
     this.trajectoryMaterial.emissive.copy(state.tubeColor)
-    this.trajectoryMaterial.emissiveIntensity = 0.16 + Math.min(state.peakForce / 1.6, 1) * 0.36
+    this.trajectoryMaterial.opacity = 0.62
+    this.trajectoryMaterial.emissiveIntensity = 0.04 + Math.min(state.peakForce / 1.6, 1) * 0.14
     this.trajectoryMesh = new THREE.Mesh(geometry, this.trajectoryMaterial)
     this.scene.add(this.trajectoryMesh)
   }

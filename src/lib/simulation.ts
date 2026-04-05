@@ -376,28 +376,30 @@ export function describeAxisEffect(
 
 export function describeSpinLab(snapshot: SimulationSnapshot): string[] {
   const notes: string[] = []
-  const magnusDirection = dominantAxis(snapshot.referenceMagnusForce)
   const windSpeedMph =
     magnitude(snapshot.initialVelocity) / MPH_TO_METERS_PER_SECOND
+  const projectedMagnus = Math.hypot(snapshot.referenceMagnusForce.y, snapshot.referenceMagnusForce.z)
+  const visibleSpinAxis = Math.hypot(snapshot.spinAxis.y, snapshot.spinAxis.z)
 
   notes.push(
     `Relative wind is set to ${roundTo(windSpeedMph, 0)} mph, matching the release speed.`,
   )
+  notes.push(
+    snapshot.referenceMagnusForce.z >= 0
+      ? 'In the pitcher view, the highlighted Magnus arrow points up because spin is adding carry.'
+      : 'In the pitcher view, the highlighted Magnus arrow points down because spin is adding drop.',
+  )
 
-  if (magnusDirection.axis === 'z') {
-    notes.push(
-      magnusDirection.sign > 0
-        ? 'Upper and lower flow split is generating upward lift.'
-        : 'Upper and lower flow split is generating downward force.',
-    )
-  } else if (magnusDirection.axis === 'y') {
-    notes.push(
-      magnusDirection.sign > 0
-        ? 'Flow is biased toward arm-side movement.'
-        : 'Flow is biased toward glove-side movement.',
-    )
+  if (visibleSpinAxis > 0.78) {
+    notes.push('The spin tilt sits clearly on the dial, so the cyan orbit cue reads cleanly.')
+  } else if (visibleSpinAxis < 0.35) {
+    notes.push('Only part of the tilt sits on the dial plane, so the orbit cue reads softer.')
   } else {
-    notes.push('Most of the force stays aligned with the travel axis, so visible break stays muted.')
+    notes.push('The orbit cue shows the dial tilt, while some spin axis component still sits out of plane.')
+  }
+
+  if (projectedMagnus < snapshot.metrics.magnusForceN * 0.55) {
+    notes.push('A noticeable share of the force is still aligned with travel, so the pitcher-view vector stays compact.')
   }
 
   if (snapshot.metrics.spinEfficiencyPct > 90) {
@@ -724,25 +726,6 @@ function computeMagnusForce(velocity: Vec3, spinVector: Vec3): Vec3 {
     0.5 * AIR_DENSITY * liftCoefficient * BALL_AREA_METERS * speed ** 2
 
   return scale(spinDirection, magnusMagnitude)
-}
-
-function dominantAxis(vector: Vec3): {
-  axis: 'x' | 'y' | 'z'
-  sign: number
-} {
-  const absX = Math.abs(vector.x)
-  const absY = Math.abs(vector.y)
-  const absZ = Math.abs(vector.z)
-
-  if (absX >= absY && absX >= absZ) {
-    return { axis: 'x', sign: Math.sign(vector.x) || 1 }
-  }
-
-  if (absY >= absZ) {
-    return { axis: 'y', sign: Math.sign(vector.y) || 1 }
-  }
-
-  return { axis: 'z', sign: Math.sign(vector.z) || 1 }
 }
 
 function zero(): Vec3 {

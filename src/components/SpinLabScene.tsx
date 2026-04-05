@@ -1,4 +1,4 @@
-import { createEffect, onCleanup, onMount } from 'solid-js'
+import { For, createEffect, createMemo, onCleanup, onMount } from 'solid-js'
 import * as THREE from 'three'
 
 import { createBaseballMaterial } from '../lib/baseballVisuals'
@@ -9,9 +9,18 @@ const FLOW_HIGH_COLOR = new THREE.Color('#fb923c')
 const FORCE_LOW_COLOR = new THREE.Color('#67e8f9')
 const FORCE_HIGH_COLOR = new THREE.Color('#f59e0b')
 const CAMERA_HEIGHT = 5.6
-const STREAMLINE_RADIUS = 0.58
-const STREAMLINE_RANGE_X = 3.2
-const STREAMLINE_RANGE_Y = 2.3
+const SPIN_CUE_RADIUS = 1.18
+
+const CLOCK_MARKERS = Array.from({ length: 12 }, (_, index) => {
+  const hour = index === 0 ? 12 : index
+  const angle = (index / 12) * Math.PI * 2 - Math.PI / 2
+
+  return {
+    label: String(hour),
+    x: 50 + Math.cos(angle) * 29,
+    y: 50 + Math.sin(angle) * 29,
+  }
+})
 
 interface SpinLabSceneProps {
   snapshot: SimulationSnapshot
@@ -24,10 +33,6 @@ interface SpinLabState {
   spinAxis: THREE.Vector3
   spinRateRpm: number
   speedMph: number
-}
-
-interface LocalFrame {
-  spinAxisLocal: THREE.Vector3
 }
 
 interface FlowPath {
@@ -46,6 +51,27 @@ function SpinLabScene(props: SpinLabSceneProps) {
   let containerRef!: HTMLDivElement
   let canvasRef!: HTMLCanvasElement
   let controller: SpinLabSceneController | undefined
+  const overlayCards = createMemo(() => [
+    {
+      label: 'Pitch Speed',
+      value: `${Math.round(props.inputs.velocityMph)} mph`,
+    },
+    {
+      label: 'Total Spin',
+      value: `${Math.round(props.inputs.spinRateRpm)} rpm`,
+    },
+    {
+      label: 'Magnus',
+      value: `${props.snapshot.metrics.magnusForceN.toFixed(2)} N`,
+    },
+    {
+      label: 'Spin Eff',
+      value: `${Math.round(props.snapshot.metrics.spinEfficiencyPct)}%`,
+    },
+  ])
+  const spinModeLabel = createMemo(() =>
+    props.snapshot.referenceMagnusForce.z >= 0 ? 'Backspin bias' : 'Topspin bias',
+  )
 
   onMount(() => {
     controller = new SpinLabSceneController(containerRef, canvasRef)
@@ -63,11 +89,58 @@ function SpinLabScene(props: SpinLabSceneProps) {
   return (
     <div
       ref={containerRef}
-      class="pitch-scene relative h-full min-h-[30rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[#061320]"
+      class="pitch-scene relative h-full min-h-[30rem] overflow-hidden rounded-[2rem] border border-black/10 bg-[#f4f5f7] xl:min-h-0"
     >
       <canvas ref={canvasRef} class="size-full" />
-      <div class="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#04101d]/85 to-transparent" />
-      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#04101d]/90 via-[#04101d]/10 to-transparent" />
+      <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/80 to-transparent" />
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-slate-200/75 via-slate-200/12 to-transparent" />
+      <svg
+        class="pointer-events-none absolute inset-0"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden="true"
+      >
+        <circle cx="50" cy="50" r="24" fill="none" stroke="rgba(148,163,184,0.34)" stroke-width="0.6" />
+        <circle cx="50" cy="50" r="18" fill="none" stroke="rgba(203,213,225,0.34)" stroke-width="0.4" />
+        <line x1="50" y1="23" x2="50" y2="77" stroke="rgba(203,213,225,0.42)" stroke-width="0.32" />
+        <line x1="23" y1="50" x2="77" y2="50" stroke="rgba(203,213,225,0.42)" stroke-width="0.32" />
+        <For each={CLOCK_MARKERS}>
+          {(marker) => (
+            <text
+              x={marker.x}
+              y={marker.y}
+              fill="rgba(71,85,105,0.95)"
+              font-size="3.1"
+              text-anchor="middle"
+              dominant-baseline="middle"
+              font-family="var(--font-mono), monospace"
+            >
+              {marker.label}
+            </text>
+          )}
+        </For>
+      </svg>
+      <div class="pointer-events-none absolute left-4 top-4 sm:left-6 sm:top-5">
+        <div class="font-[var(--font-mono)] text-[0.62rem] uppercase tracking-[0.28em] text-slate-500">
+          Ball Spin (Tilt)
+        </div>
+        <div class="mt-1 font-[var(--font-display)] text-lg text-slate-900">Pitcher&apos;s View</div>
+      </div>
+      <div class="pointer-events-none absolute right-4 top-4 rounded-full border border-slate-300/90 bg-white/78 px-3 py-1 font-[var(--font-mono)] text-[0.62rem] uppercase tracking-[0.22em] text-slate-600 shadow-[0_10px_25px_rgba(15,23,42,0.08)] sm:right-6 sm:top-5">
+        {spinModeLabel()}
+      </div>
+      <div class="pointer-events-none absolute inset-x-4 bottom-4 grid grid-cols-2 gap-3 sm:inset-x-6 sm:bottom-6 sm:grid-cols-4">
+        <For each={overlayCards()}>
+          {(card) => (
+            <div class="rounded-[1.15rem] border border-slate-200/90 bg-white/88 px-3 py-2.5 shadow-[0_16px_36px_rgba(15,23,42,0.08)] backdrop-blur">
+              <div class="font-[var(--font-mono)] text-[0.58rem] uppercase tracking-[0.24em] text-slate-500">
+                {card.label}
+              </div>
+              <div class="mt-1 font-[var(--font-display)] text-lg text-slate-900">{card.value}</div>
+            </div>
+          )}
+        </For>
+      </div>
     </div>
   )
 }
@@ -82,12 +155,17 @@ class SpinLabSceneController {
   private readonly ballMesh: THREE.Mesh
   private readonly spinAxisLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   private readonly forceArrow: THREE.ArrowHelper
+  private readonly spinCueRing: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>
+  private readonly spinCueTracer: THREE.Mesh<
+    THREE.SphereGeometry,
+    THREE.MeshBasicMaterial
+  >
   private readonly flowGroup = new THREE.Group()
   private readonly particleGeometry = new THREE.SphereGeometry(0.03, 16, 16)
   private readonly particleMaterial = new THREE.MeshBasicMaterial({
-    color: 0xe0fbff,
+    color: 0x38bdf8,
     transparent: true,
-    opacity: 0.82,
+    opacity: 0.68,
   })
   private readonly coreGlow: THREE.Mesh
   private animationFrame = 0
@@ -98,10 +176,11 @@ class SpinLabSceneController {
   constructor(container: HTMLDivElement, canvas: HTMLCanvasElement) {
     this.container = container
     this.scene = new THREE.Scene()
-    this.scene.fog = new THREE.FogExp2(0x04101d, 0.025)
+    this.scene.fog = new THREE.FogExp2(0xf3f4f6, 0.012)
 
     this.camera = new THREE.OrthographicCamera(-4, 4, 2.8, -2.8, 0.1, 20)
-    this.camera.position.set(0, 0, 8)
+    this.camera.position.set(8, 0, 0)
+    this.camera.up.set(0, 0, 1)
     this.camera.lookAt(0, 0, 0)
 
     this.renderer = new THREE.WebGLRenderer({
@@ -128,7 +207,7 @@ class SpinLabSceneController {
       new THREE.LineBasicMaterial({
         color: 0x93e8ff,
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.28,
       }),
     )
     this.forceArrow = new THREE.ArrowHelper(
@@ -139,12 +218,21 @@ class SpinLabSceneController {
       0.28,
       0.16,
     )
+    this.spinCueRing = this.createSpinCueRing()
+    this.spinCueTracer = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 18, 18),
+      new THREE.MeshBasicMaterial({
+        color: 0x7dd3fc,
+        transparent: true,
+        opacity: 0.88,
+      }),
+    )
     this.coreGlow = new THREE.Mesh(
       new THREE.CircleGeometry(0.94, 64),
       new THREE.MeshBasicMaterial({
-        color: 0x22d3ee,
+        color: 0x38bdf8,
         transparent: true,
-        opacity: 0.08,
+        opacity: 0.05,
       }),
     )
 
@@ -188,6 +276,10 @@ class SpinLabSceneController {
 
     this.spinAxisLine.geometry.dispose()
     this.spinAxisLine.material.dispose()
+    this.spinCueRing.geometry.dispose()
+    this.spinCueRing.material.dispose()
+    this.spinCueTracer.geometry.dispose()
+    this.spinCueTracer.material.dispose()
     this.particleGeometry.dispose()
     this.particleMaterial.dispose()
     this.clearFlowGroup()
@@ -195,36 +287,41 @@ class SpinLabSceneController {
   }
 
   private setupScene() {
-    const ambient = new THREE.AmbientLight(0xa8d8ff, 0.82)
-    const key = new THREE.DirectionalLight(0xffffff, 2.2)
-    key.position.set(-3.8, -2.6, 6)
-    const rim = new THREE.DirectionalLight(0x22d3ee, 1.1)
-    rim.position.set(2.8, 2.2, 3.8)
+    const ambient = new THREE.AmbientLight(0xffffff, 1.18)
+    const key = new THREE.DirectionalLight(0xffffff, 1.84)
+    key.position.set(6, -2.6, 5.6)
+    const rim = new THREE.DirectionalLight(0xcbd5e1, 0.66)
+    rim.position.set(-2.4, 2.2, 3.8)
 
     const lane = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-3.5, 0, -0.25),
-        new THREE.Vector3(3.5, 0, -0.25),
+        new THREE.Vector3(0, -2.4, 0),
+        new THREE.Vector3(0, 2.4, 0),
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, 2.4),
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -2.4),
       ]),
       new THREE.LineDashedMaterial({
-        color: 0x12314d,
+        color: 0x94a3b8,
         dashSize: 0.24,
         gapSize: 0.12,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.45,
       }),
     )
     lane.computeLineDistances()
 
     const frame = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.PlaneGeometry(7.2, 4.5)),
+      new THREE.EdgesGeometry(new THREE.PlaneGeometry(5.2, 5.2)),
       new THREE.LineBasicMaterial({
-        color: 0x10253a,
+        color: 0xcbd5e1,
         transparent: true,
-        opacity: 0.38,
+        opacity: 0.72,
       }),
     )
-    frame.position.z = -0.35
+    frame.rotation.y = Math.PI / 2
+    this.coreGlow.rotation.y = Math.PI / 2
 
     this.ballGroup.add(this.ballMesh)
     this.ballGroup.add(this.spinAxisLine)
@@ -234,6 +331,8 @@ class SpinLabSceneController {
     this.scene.add(this.flowGroup)
     this.scene.add(this.ballGroup)
     this.scene.add(this.forceArrow)
+    this.scene.add(this.spinCueRing)
+    this.scene.add(this.spinCueTracer)
   }
 
   private resize() {
@@ -275,35 +374,98 @@ class SpinLabSceneController {
     )
     this.currentState.speedMph = lerp(this.currentState.speedMph, this.targetState.speedMph, 0.12)
 
-    const frame = getLocalFrame(this.currentState)
+    const projectedAxis = new THREE.Vector3(0, this.currentState.spinAxis.y, this.currentState.spinAxis.z)
+    if (projectedAxis.lengthSq() < 1e-6) {
+      projectedAxis.set(0, 0, 1)
+    } else {
+      projectedAxis.normalize()
+    }
     const positions = this.spinAxisLine.geometry.attributes.position.array as Float32Array
-    positions[0] = -frame.spinAxisLocal.x * 0.76
-    positions[1] = -frame.spinAxisLocal.y * 0.76
-    positions[2] = -frame.spinAxisLocal.z * 0.76
-    positions[3] = frame.spinAxisLocal.x * 0.76
-    positions[4] = frame.spinAxisLocal.y * 0.76
-    positions[5] = frame.spinAxisLocal.z * 0.76
+    positions[0] = -projectedAxis.x * 0.76
+    positions[1] = -projectedAxis.y * 0.76
+    positions[2] = -projectedAxis.z * 0.76
+    positions[3] = projectedAxis.x * 0.76
+    positions[4] = projectedAxis.y * 0.76
+    positions[5] = projectedAxis.z * 0.76
     this.spinAxisLine.geometry.attributes.position.needsUpdate = true
 
     const spinRps = getVisualSpinRps(this.currentState.spinRateRpm)
     this.ballMesh.quaternion.setFromAxisAngle(
-      frame.spinAxisLocal,
+      this.currentState.spinAxis,
       (now / 1000) * spinRps * Math.PI * 2,
     )
 
-    const forceMagnitude = this.currentState.magnusForce.length()
+    const projectedMagnus = new THREE.Vector3(
+      0,
+      this.currentState.magnusForce.y,
+      this.currentState.magnusForce.z,
+    )
+    const forceMagnitude = projectedMagnus.length()
+    const forceDirection =
+      forceMagnitude < 1e-6 ? new THREE.Vector3(0, 0, 1) : projectedMagnus.clone().normalize()
     const arrowColor = FORCE_LOW_COLOR.clone().lerp(
       FORCE_HIGH_COLOR,
       clamp01(forceMagnitude / 1.2),
     )
-    this.forceArrow.setDirection(new THREE.Vector3(0, 1, 0))
-    this.forceArrow.setLength(0.42 + forceMagnitude * 1.6, 0.28, 0.16)
+    this.forceArrow.position.set(0, 0, 0)
+    this.forceArrow.setDirection(forceDirection)
+    this.forceArrow.setLength(0.38 + forceMagnitude * 1.95, 0.26, 0.14)
     this.forceArrow.setColor(arrowColor)
+    this.updateSpinCue(now)
 
     const glowMaterial = this.coreGlow.material
     if (!Array.isArray(glowMaterial)) {
       glowMaterial.opacity = 0.05 + clamp01(forceMagnitude / 1.2) * 0.08
     }
+  }
+
+  private createSpinCueRing() {
+    const points: THREE.Vector3[] = []
+
+    for (let index = 0; index < 72; index += 1) {
+      const angle = (index / 72) * Math.PI * 2
+      points.push(
+        new THREE.Vector3(
+          0,
+          Math.cos(angle) * SPIN_CUE_RADIUS,
+          Math.sin(angle) * SPIN_CUE_RADIUS,
+        ),
+      )
+    }
+
+    return new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({
+        color: 0x0f172a,
+        transparent: true,
+        opacity: 0.12,
+      }),
+    )
+  }
+
+  private updateSpinCue(now: number) {
+    if (!this.currentState) {
+      return
+    }
+
+    const visibleSpin = clamp01(Math.hypot(this.currentState.spinAxis.y, this.currentState.spinAxis.z))
+    this.spinCueRing.material.opacity = 0.12 + visibleSpin * 0.26
+    this.spinCueTracer.material.opacity = 0.22 + visibleSpin * 0.7
+    this.spinCueTracer.scale.setScalar(0.84 + visibleSpin * 0.34)
+
+    const directionSeed =
+      Math.sign(this.currentState.spinAxis.x) ||
+      Math.sign(this.currentState.magnusForce.y) ||
+      1
+    const direction = directionSeed >= 0 ? -1 : 1
+    const cueRps = 0.18 + visibleSpin * 0.46
+    const angle = Math.PI / 2 + direction * (now / 1000) * cueRps * Math.PI * 2
+
+    this.spinCueTracer.position.set(
+      0,
+      Math.cos(angle) * SPIN_CUE_RADIUS,
+      Math.sin(angle) * SPIN_CUE_RADIUS,
+    )
   }
 
   private rebuildFlowVisualization(state: SpinLabState) {
@@ -380,32 +542,24 @@ class SpinLabSceneController {
 }
 
 function buildFlowPaths(state: SpinLabState): FlowPath[] {
-  const circulation = (0.12 + clamp01(state.magnusForce.length() / 1.2) * 0.78) * state.speedMph / 105
-  const seeds = [-1.75, -1.4, -1.05, -0.7, 0.7, 1.05, 1.4, 1.75]
+  const directionSeed = Math.sign(state.spinAxis.x) || Math.sign(state.magnusForce.y) || 1
+  const direction = directionSeed >= 0 ? 1 : -1
+  const amplitude = 0.12 + clamp01(state.magnusForce.length() / 1.2) * 0.78
+  const rings = [1.42, 1.7, 1.98]
   const paths: FlowPath[] = []
 
-  seeds.forEach((seedY) => {
-    let point = new THREE.Vector3(-STREAMLINE_RANGE_X, seedY, 0)
+  rings.forEach((radius, ringIndex) => {
     const points: THREE.Vector3[] = []
     const colors: THREE.Color[] = []
 
-    for (let step = 0; step < 180; step += 1) {
-      const field = flowField(point.x, point.y, circulation)
-      points.push(point.clone())
-      colors.push(colorForFlow(field.length(), point.y))
-
-      point = point.clone().add(field.normalize().multiplyScalar(0.07))
-
-      const radial = Math.hypot(point.x, point.y)
-      if (radial < STREAMLINE_RADIUS + 0.04) {
-        const angle = Math.atan2(point.y, point.x)
-        point.x = Math.cos(angle) * (STREAMLINE_RADIUS + 0.04)
-        point.y = Math.sin(angle) * (STREAMLINE_RADIUS + 0.04)
-      }
-
-      if (point.x > STREAMLINE_RANGE_X || Math.abs(point.y) > STREAMLINE_RANGE_Y) {
-        break
-      }
+    for (let step = 0; step <= 90; step += 1) {
+      const t = step / 90
+      const angle = -Math.PI * 0.82 + direction * t * Math.PI * 1.64
+      const wobble = Math.sin(t * Math.PI * 2 + ringIndex * 0.7) * 0.05 * amplitude
+      const y = Math.cos(angle) * (radius + wobble)
+      const z = Math.sin(angle) * (radius + wobble)
+      points.push(new THREE.Vector3(0, y, z))
+      colors.push(colorForFlow(0.78 + amplitude + ringIndex * 0.08, z))
     }
 
     if (points.length > 1) {
@@ -414,24 +568,6 @@ function buildFlowPaths(state: SpinLabState): FlowPath[] {
   })
 
   return paths
-}
-
-function flowField(x: number, y: number, circulation: number): THREE.Vector3 {
-  const uniformVelocity = 1.12
-  const radius = STREAMLINE_RADIUS
-  const r = Math.max(Math.hypot(x, y), radius + 0.02)
-  const theta = Math.atan2(y, x)
-  const radiusSquared = radius * radius
-  const rSquared = r * r
-  const uRadial = uniformVelocity * (1 - radiusSquared / rSquared) * Math.cos(theta)
-  const uTangential =
-    -uniformVelocity * (1 + radiusSquared / rSquared) * Math.sin(theta) +
-    circulation / (2 * Math.PI * r)
-
-  const u = uRadial * Math.cos(theta) - uTangential * Math.sin(theta)
-  const v = uRadial * Math.sin(theta) + uTangential * Math.cos(theta)
-
-  return new THREE.Vector3(u, v, 0)
 }
 
 function colorForFlow(speed: number, y: number): THREE.Color {
@@ -456,38 +592,6 @@ function sampleVectorPath(path: THREE.Vector3[], t: number): THREE.Vector3 {
   return path[index].clone().lerp(path[index + 1], ratio)
 }
 
-function getLocalFrame(state: SpinLabState): LocalFrame {
-  const flowAxis = normalizeOrFallback(state.relativeWind, new THREE.Vector3(1, 0, 0))
-  let forceAxis = state.magnusForce.clone()
-  forceAxis.sub(flowAxis.clone().multiplyScalar(forceAxis.dot(flowAxis)))
-
-  if (forceAxis.lengthSq() < 1e-5) {
-    forceAxis = state.spinAxis
-      .clone()
-      .sub(flowAxis.clone().multiplyScalar(state.spinAxis.dot(flowAxis)))
-  }
-
-  const fallback = Math.abs(flowAxis.z) > 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1)
-  forceAxis = normalizeOrFallback(forceAxis, fallback)
-  let normalAxis = new THREE.Vector3().crossVectors(flowAxis, forceAxis)
-
-  if (normalAxis.lengthSq() < 1e-5) {
-    normalAxis = new THREE.Vector3().crossVectors(flowAxis, fallback)
-  }
-
-  normalAxis.normalize()
-
-  const spinAxisLocal = new THREE.Vector3(
-    state.spinAxis.dot(flowAxis),
-    state.spinAxis.dot(forceAxis),
-    state.spinAxis.dot(normalAxis),
-  )
-
-  return {
-    spinAxisLocal: normalizeOrFallback(spinAxisLocal, new THREE.Vector3(0, 1, 0)),
-  }
-}
-
 function cloneLabState(state: SpinLabState): SpinLabState {
   return {
     relativeWind: state.relativeWind.clone(),
@@ -500,14 +604,6 @@ function cloneLabState(state: SpinLabState): SpinLabState {
 
 function dampVector(current: THREE.Vector3, target: THREE.Vector3, factor: number) {
   current.lerp(target, factor)
-}
-
-function normalizeOrFallback(vector: THREE.Vector3, fallback: THREE.Vector3): THREE.Vector3 {
-  if (vector.lengthSq() < 1e-6) {
-    return fallback.clone().normalize()
-  }
-
-  return vector.clone().normalize()
 }
 
 function toThreeVector(vector: Vec3): THREE.Vector3 {

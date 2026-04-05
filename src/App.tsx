@@ -63,6 +63,12 @@ function App() {
   const plateHeightLabel = createMemo(
     () => `${roundTo(snapshot().platePosition.z * 39.3701, 1).toFixed(1)} in`,
   )
+  const magnusVectorLabel = createMemo(() =>
+    getMagnusVectorLabel(snapshot().referenceMagnusForce, inputs().handedness),
+  )
+  const magnusVectorHint = createMemo(() =>
+    getMagnusVectorHint(snapshot().referenceMagnusForce, inputs().handedness),
+  )
 
   const selectPreset = (presetId: BuiltInPresetId) => {
     setInputs(getPresetInputs(presetId, inputs().handedness))
@@ -103,15 +109,15 @@ function App() {
   }
 
   return (
-    <main class="min-h-screen overflow-hidden bg-[#030917] text-slate-100">
+    <main class="min-h-screen overflow-hidden bg-[#030917] text-slate-100 xl:h-[100svh] xl:min-h-[100svh]">
       <div class="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(61,158,255,0.18),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(255,155,66,0.12),transparent_24%),linear-gradient(180deg,#030917_0%,#08111d_45%,#030917_100%)]" />
       <div class="pointer-events-none fixed inset-0 aurora-grid opacity-70" />
 
-      <div class="relative mx-auto flex min-h-screen w-full max-w-[1560px] flex-col gap-5 px-4 py-4 sm:px-6 sm:py-6 xl:flex-row xl:gap-7 xl:px-7">
-        <section class="relative flex min-h-[42rem] flex-1 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_36px_140px_rgba(3,9,23,0.75)] backdrop-blur-sm">
+      <div class="relative mx-auto flex min-h-screen w-full max-w-[1560px] flex-col gap-5 px-4 py-4 sm:px-6 sm:py-6 xl:h-[100svh] xl:min-h-0 xl:flex-row xl:gap-7 xl:overflow-hidden xl:px-7">
+        <section class="relative flex min-h-[36rem] flex-1 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_36px_140px_rgba(3,9,23,0.75)] backdrop-blur-sm xl:h-full xl:min-h-0">
           <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(24,40,67,0.92)_0%,rgba(6,14,26,0.45)_34%,rgba(6,14,26,0.2)_100%)]" />
-          <div class="relative z-10 flex min-h-full w-full flex-col">
-            <div class="flex flex-col gap-5 px-5 pb-2 pt-5 sm:px-7 sm:pt-7">
+          <div class="relative z-10 flex min-h-full w-full flex-col xl:min-h-0">
+            <div class="flex flex-col gap-5 px-5 pb-2 pt-5 sm:px-7 sm:pt-7 xl:gap-4 xl:px-6 xl:pt-5">
               <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div class="max-w-xl">
                   <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.4em] text-cyan-200/80">
@@ -123,9 +129,9 @@ function App() {
                   <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
                     <Show
                       when={viewMode() === 'flight'}
-                      fallback="Hold the baseball in a wind tunnel view. The live spin axis, airflow split, drag, and Magnus vectors reveal why the force bends the path."
+                      fallback="Freeze the baseball on a TrackMan-style tilt dial. The amber arrow shows the projected Magnus vector, while the cyan cue slows the spin direction enough to read the tilt."
                     >
-                      Auto-aim keeps the selected pitch finishing at the plate, while side and loft offsets let you bias the release angle without losing the physics readout.
+                      Auto-aim keeps the selected pitch finishing at the plate from a catcher-side TrackMan view, while side and loft offsets bias the release without breaking the readout.
                     </Show>
                   </p>
                 </div>
@@ -156,7 +162,7 @@ function App() {
               </div>
             </div>
 
-            <div class="relative flex-1 px-2 pb-2 sm:px-4 sm:pb-4">
+            <div class="relative flex-1 px-2 pb-2 sm:px-4 sm:pb-4 xl:min-h-0">
               <Switch>
                 <Match when={viewMode() === 'flight'}>
                   <PitchScene snapshot={snapshot()} inputs={inputs()} />
@@ -207,9 +213,9 @@ function App() {
                       hint="Reference force"
                     />
                     <LiveStrip
-                      label="Drag"
-                      value={`${roundTo(metrics().dragForceN, 2).toFixed(2)} N`}
-                      hint="Opposes the wind"
+                      label="Magnus Vector"
+                      value={magnusVectorLabel()}
+                      hint={magnusVectorHint()}
                     />
                   </Match>
                 </Switch>
@@ -218,10 +224,11 @@ function App() {
           </div>
         </section>
 
-        <aside class="relative w-full shrink-0 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-sm xl:w-[27rem]">
+        <aside class="relative w-full shrink-0 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-sm xl:h-full xl:w-[27rem] xl:min-h-0">
           <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.01)_100%)]" />
-          <div class="relative flex h-full flex-col">
-            <section class="border-b border-white/8 px-5 pb-5 pt-5 sm:px-6 sm:pb-6 sm:pt-6">
+          <div class="relative flex h-full flex-col xl:min-h-0">
+            <div class="app-shell-scroll relative flex h-full flex-col xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+            <section class="border-b border-white/8 px-5 pb-5 pt-5 sm:px-6 sm:pb-6 sm:pt-6 xl:px-5 xl:pb-4 xl:pt-5">
               <div class="flex items-center justify-between">
                 <div>
                   <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.32em] text-slate-400">
@@ -271,7 +278,7 @@ function App() {
               </div>
             </section>
 
-            <section class="border-b border-white/8 px-5 py-5 sm:px-6 sm:py-6">
+            <section class="border-b border-white/8 px-5 py-5 sm:px-6 sm:py-6 xl:px-5 xl:py-4">
               <Switch>
                 <Match when={viewMode() === 'flight'}>
                   <SectionHeader
@@ -323,10 +330,10 @@ function App() {
                       ratio={clampValue(metrics().magnusForceN / 1.6, 0, 1)}
                     />
                     <MetricRail
-                      label="Drag force"
-                      value={`${roundTo(metrics().dragForceN, 2).toFixed(2)} N`}
-                      sublabel="Force opposing the relative wind."
-                      ratio={clampValue(metrics().dragForceN / 1.4, 0, 1)}
+                      label="Magnus vector"
+                      value={magnusVectorLabel()}
+                      sublabel={magnusVectorHint()}
+                      ratio={clampValue(Math.hypot(snapshot().referenceMagnusForce.y, snapshot().referenceMagnusForce.z) / metrics().magnusForceN, 0, 1)}
                     />
                     <MetricRail
                       label="Spin efficiency"
@@ -345,7 +352,7 @@ function App() {
               </Switch>
             </section>
 
-            <section class="border-b border-white/8 px-5 py-5 sm:px-6 sm:py-6">
+            <section class="border-b border-white/8 px-5 py-5 sm:px-6 sm:py-6 xl:px-5 xl:py-4">
               <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.32em] text-slate-400">
                 Control surface
               </p>
@@ -431,14 +438,15 @@ function App() {
                 </Match>
                 <Match when={viewMode() === 'spin-lab'}>
                   <p class="mt-5 text-sm leading-6 text-slate-300">
-                    Spin Lab inherits the same speed and axis inputs, then freezes the baseball so
-                    the airflow asymmetry can be inspected directly.
+                    Spin Lab inherits the same speed and axis inputs, then freezes the baseball on
+                    a pitcher-view tilt dial so the Magnus vector and spin direction can be
+                    inspected directly.
                   </p>
                 </Match>
               </Switch>
             </section>
 
-            <section class="px-5 py-5 sm:px-6 sm:py-6">
+            <section class="px-5 py-5 sm:px-6 sm:py-6 xl:px-5 xl:py-4">
               <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.32em] text-slate-400">
                 {viewMode() === 'flight' ? 'Axis notes' : 'Flow notes'}
               </p>
@@ -459,6 +467,7 @@ function App() {
                 </ul>
               </div>
             </section>
+            </div>
           </div>
         </aside>
       </div>
@@ -629,6 +638,37 @@ function HandednessButton(props: HandednessButtonProps) {
 function formatSigned(value: number, unit: string): string {
   const rounded = roundTo(value, 1).toFixed(1)
   return `${value >= 0 ? '+' : ''}${rounded} ${unit}`
+}
+
+function getMagnusVectorLabel(
+  force: { y: number; z: number },
+  handedness: Handedness,
+): string {
+  const vertical = force.z >= 0 ? 'Up' : 'Down'
+  const armSideForce = handedness === 'RHP' ? force.y : -force.y
+
+  if (Math.abs(force.y) < Math.abs(force.z) * 0.35) {
+    return vertical
+  }
+
+  return `${vertical} / ${armSideForce >= 0 ? 'Arm-side' : 'Glove-side'}`
+}
+
+function getMagnusVectorHint(
+  force: { y: number; z: number },
+  handedness: Handedness,
+): string {
+  const armSideForce = handedness === 'RHP' ? force.y : -force.y
+
+  if (Math.abs(force.y) < Math.abs(force.z) * 0.35) {
+    return force.z >= 0
+      ? 'The displayed arrow is lifting the pitch in the pitcher view.'
+      : 'The displayed arrow is driving the pitch down in the pitcher view.'
+  }
+
+  return `${force.z >= 0 ? 'Upward' : 'Downward'} force with ${
+    armSideForce >= 0 ? 'arm-side' : 'glove-side'
+  } bias in the pitcher view.`
 }
 
 export default App
