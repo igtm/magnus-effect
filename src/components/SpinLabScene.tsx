@@ -5,11 +5,11 @@ import { createBaseballMaterial } from '../lib/baseballVisuals'
 import { OutlinedArrow } from '../lib/outlinedArrow'
 import type { SimulationInputs, SimulationSnapshot, Vec3 } from '../lib/simulation'
 
-const FORCE_LOW_COLOR = new THREE.Color('#67e8f9')
-const FORCE_HIGH_COLOR = new THREE.Color('#f59e0b')
+const FORCE_COLOR = new THREE.Color('#38bdf8')
 const CAMERA_HEIGHT = 5.6
 const LAB_OFFSET_Z = 0.7
-const BAND_RADIUS = 0.425
+const BAND_INNER_RADIUS = 0.46
+const BAND_OUTER_RADIUS = 0.56
 const DRAG_RADIUS = 1.55
 const MPH_TO_METERS_PER_SECOND = 0.44704
 const RPM_TO_RAD_PER_SECOND = (Math.PI * 2) / 60
@@ -118,8 +118,11 @@ class SpinLabSceneController {
   private readonly spinAxisLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   private readonly forceArrow: OutlinedArrow
   private readonly bandGroup = new THREE.Group()
-  private readonly bandMesh: THREE.Mesh
-  private readonly bandMarker: THREE.Mesh
+  private readonly bandMesh: THREE.Mesh<
+    THREE.RingGeometry,
+    THREE.MeshBasicMaterial
+  >
+  private readonly bandTexture: THREE.CanvasTexture
   private animationFrame = 0
   private targetState: SpinLabState | undefined
   private currentState: SpinLabState | undefined
@@ -154,7 +157,7 @@ class SpinLabSceneController {
     this.renderer.toneMappingExposure = 1.14
 
     this.ballMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.42, 64, 64),
+      new THREE.SphereGeometry(0.54, 64, 64),
       createBaseballMaterial(this.renderer.capabilities.getMaxAnisotropy()),
     )
     this.spinAxisLine = new THREE.Line(
@@ -169,25 +172,16 @@ class SpinLabSceneController {
       }),
     )
     this.forceArrow = new OutlinedArrow({
-      color: 0xf59e0b,
-      shaftRadius: 0.045,
-      headRadius: 0.125,
+      color: 0x38bdf8,
+      outlineColor: 0x0ea5e9,
+      shaftRadius: 0.055,
+      headRadius: 0.14,
     })
+    const { texture, material } = createSpinBandMaterial()
+    this.bandTexture = texture
     this.bandMesh = new THREE.Mesh(
-      new THREE.TorusGeometry(BAND_RADIUS, 0.038, 16, 96),
-      new THREE.MeshStandardMaterial({
-        color: 0x85522f,
-        roughness: 0.7,
-        metalness: 0.04,
-      }),
-    )
-    this.bandMarker = new THREE.Mesh(
-      new THREE.BoxGeometry(0.17, 0.08, 0.072),
-      new THREE.MeshStandardMaterial({
-        color: 0xf59e0b,
-        roughness: 0.45,
-        metalness: 0.02,
-      }),
+      new THREE.RingGeometry(BAND_INNER_RADIUS, BAND_OUTER_RADIUS, 128),
+      material,
     )
 
     this.setupScene()
@@ -241,17 +235,8 @@ class SpinLabSceneController {
     this.spinAxisLine.geometry.dispose()
     this.spinAxisLine.material.dispose()
     this.bandMesh.geometry.dispose()
-    if (Array.isArray(this.bandMesh.material)) {
-      this.bandMesh.material.forEach((entry) => entry.dispose())
-    } else {
-      this.bandMesh.material.dispose()
-    }
-    this.bandMarker.geometry.dispose()
-    if (Array.isArray(this.bandMarker.material)) {
-      this.bandMarker.material.forEach((entry) => entry.dispose())
-    } else {
-      this.bandMarker.material.dispose()
-    }
+    this.bandMesh.material.dispose()
+    this.bandTexture.dispose()
     this.forceArrow.dispose()
     this.renderer.dispose()
   }
@@ -311,7 +296,6 @@ class SpinLabSceneController {
     frame.rotation.y = Math.PI / 2
 
     this.bandGroup.add(this.bandMesh)
-    this.bandGroup.add(this.bandMarker)
     this.ballGroup.add(this.ballMesh)
     this.ballGroup.add(this.spinAxisLine)
     this.ballGroup.add(this.bandGroup)
@@ -384,8 +368,7 @@ class SpinLabSceneController {
       new THREE.Vector3(0, 0, 1),
       this.currentState.spinAxis.clone().normalize(),
     )
-    this.bandMarker.position.set(Math.cos(spinAngle) * BAND_RADIUS, Math.sin(spinAngle) * BAND_RADIUS, 0)
-    this.bandMarker.rotation.set(0, 0, spinAngle + Math.PI / 2)
+    this.bandMesh.rotation.z = spinAngle
 
     const projectedMagnus = new THREE.Vector3(
       0,
@@ -395,14 +378,10 @@ class SpinLabSceneController {
     const forceMagnitude = projectedMagnus.length()
     const forceDirection =
       forceMagnitude < 1e-6 ? new THREE.Vector3(0, 0, 1) : projectedMagnus.clone().normalize()
-    const arrowColor = FORCE_LOW_COLOR.clone().lerp(
-      FORCE_HIGH_COLOR,
-      clamp01(forceMagnitude / 1.2),
-    )
     this.forceArrow.setPosition(new THREE.Vector3(0, 0, 0))
     this.forceArrow.setDirection(forceDirection)
-    this.forceArrow.setLength(0.22 + forceMagnitude * 0.82, 0.13)
-    this.forceArrow.setColor(arrowColor)
+    this.forceArrow.setLength(0.18 + forceMagnitude * 0.68, 0.13)
+    this.forceArrow.setColor(FORCE_COLOR)
   }
 
   private updateAxisFromPointer(event: PointerEvent) {
@@ -529,6 +508,55 @@ function lerp(start: number, end: number, ratio: number): number {
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
+}
+
+function createSpinBandMaterial() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 2048
+  canvas.height = 256
+
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    throw new Error('Unable to create spin band texture canvas.')
+  }
+
+  context.clearRect(0, 0, canvas.width, canvas.height)
+
+  const ribbon = context.createLinearGradient(0, 0, 0, canvas.height)
+  ribbon.addColorStop(0, 'rgba(56, 189, 248, 0.12)')
+  ribbon.addColorStop(0.18, 'rgba(56, 189, 248, 0.92)')
+  ribbon.addColorStop(0.5, 'rgba(125, 211, 252, 0.98)')
+  ribbon.addColorStop(0.82, 'rgba(56, 189, 248, 0.92)')
+  ribbon.addColorStop(1, 'rgba(56, 189, 248, 0.12)')
+  context.fillStyle = ribbon
+  context.fillRect(0, 36, canvas.width, canvas.height - 72)
+
+  context.strokeStyle = 'rgba(224, 242, 254, 0.98)'
+  context.lineWidth = 14
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+
+  for (let x = 92; x < canvas.width + 92; x += 168) {
+    context.beginPath()
+    context.moveTo(x - 28, 82)
+    context.lineTo(x + 18, 128)
+    context.lineTo(x - 28, 174)
+    context.stroke()
+  }
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = 4
+
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+
+  return { texture, material }
 }
 
 function getVisualSpinRps(spinRateRpm: number): number {

@@ -81,6 +81,8 @@ describe('simulatePitch', () => {
       'slider',
       'curveball',
       'changeup',
+      'forkball',
+      'knuckleball',
       'gyroball',
     ] as const) {
       const snapshot = simulatePitch(getPresetInputs(presetId, 'RHP'))

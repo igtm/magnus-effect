@@ -6,6 +6,8 @@ export type PitchPresetId =
   | 'slider'
   | 'curveball'
   | 'changeup'
+  | 'forkball'
+  | 'knuckleball'
   | 'gyroball'
   | 'custom'
 
@@ -170,6 +172,34 @@ export const PRESET_DEFINITIONS: PitchPresetDefinition[] = [
       spinRateRpm: 1750,
       axisAzimuthDeg: 90,
       axisElevationDeg: 18,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
+    },
+  },
+  {
+    id: 'forkball',
+    label: 'Forkball',
+    shortLabel: 'FK',
+    summary: 'Late tumble with splitter-style drop through the plate.',
+    defaults: {
+      velocityMph: 84,
+      spinRateRpm: 1250,
+      axisAzimuthDeg: 96,
+      axisElevationDeg: 34,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
+    },
+  },
+  {
+    id: 'knuckleball',
+    label: 'Knuckleball',
+    shortLabel: 'KN',
+    summary: 'Minimal spin so drag dominates and Magnus nearly disappears.',
+    defaults: {
+      velocityMph: 74,
+      spinRateRpm: 80,
+      axisAzimuthDeg: -90,
+      axisElevationDeg: 0,
       releaseSideOffsetDeg: 0,
       releaseLiftOffsetDeg: 0,
     },
@@ -406,11 +436,11 @@ export function describeSpinLab(snapshot: SimulationSnapshot): string[] {
   )
 
   if (visibleSpinAxis > 0.78) {
-    notes.push('The spin tilt sits clearly on the dial, so the cyan orbit cue reads cleanly.')
+    notes.push('The spin tilt sits clearly on the dial, so the cyan band reads cleanly.')
   } else if (visibleSpinAxis < 0.35) {
-    notes.push('Only part of the tilt sits on the dial plane, so the orbit cue reads softer.')
+    notes.push('Only part of the tilt sits on the dial plane, so the cyan band reads softer.')
   } else {
-    notes.push('The orbit cue shows the dial tilt, while some spin axis component still sits out of plane.')
+    notes.push('The cyan band shows the dial tilt, while some spin axis component still sits out of plane.')
   }
 
   if (projectedMagnus < snapshot.metrics.magnusForceN * 0.55) {

@@ -391,7 +391,7 @@ function App() {
                   label="Spin rate"
                   value={inputs().spinRateRpm}
                   valueLabel={`${roundTo(inputs().spinRateRpm, 0)} rpm`}
-                  min={1200}
+                  min={0}
                   max={3200}
                   step={25}
                   onInput={(value) => updateNumericInput('spinRateRpm', value)}

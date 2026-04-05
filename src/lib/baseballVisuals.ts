@@ -10,12 +10,15 @@ export function createBaseballMaterial(maxAnisotropy: number): THREE.MeshPhysica
 
   return new THREE.MeshPhysicalMaterial({
     map: texture,
+    color: new THREE.Color('#fffdf8'),
     roughness: 0.62,
     metalness: 0.03,
     clearcoat: 0.9,
     clearcoatRoughness: 0.18,
     sheen: 0.5,
     sheenColor: new THREE.Color('#fff8f0'),
+    emissive: new THREE.Color('#6e6257'),
+    emissiveIntensity: 0.14,
   })
 }
 

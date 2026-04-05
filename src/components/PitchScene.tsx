@@ -500,7 +500,7 @@ class PitchSceneController {
     const normalizedProgress = elapsedMs >= travelMs ? 1 : easeInOut(elapsedMs / travelMs)
     const sample = sampleStateAtProgress(state, normalizedProgress)
     const spinAxis = state.spinAxis.clone().normalize()
-    const visualSpinRps = Math.min(state.spinRateRpm / 60, 18)
+    const visualSpinRps = getFlightVisualSpinRps(state.spinRateRpm)
     const angle = ((now - this.pitchLoopStartTime) / 1000) * visualSpinRps * Math.PI * 2
 
     this.ballGroup.position.copy(sample.position)
@@ -625,6 +625,14 @@ function easeInOut(value: number): number {
 
 function lerp(start: number, end: number, ratio: number): number {
   return start + (end - start) * ratio
+}
+
+function getFlightVisualSpinRps(spinRateRpm: number): number {
+  if (spinRateRpm <= 0) {
+    return 0
+  }
+
+  return 1 + Math.min(spinRateRpm / 3200, 1) * 4.2
 }
 
 export default PitchScene
