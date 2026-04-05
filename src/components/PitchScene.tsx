@@ -495,7 +495,7 @@ class PitchSceneController {
     const sample = sampleStateAtProgress(state, normalizedProgress)
     const spinAxis = state.spinAxis.clone().normalize()
     const visualSpinRps = getFlightVisualSpinRps(state.spinRateRpm)
-    const angle = -((now - this.pitchLoopStartTime) / 1000) * visualSpinRps * Math.PI * 2
+    const angle = ((now - this.pitchLoopStartTime) / 1000) * visualSpinRps * Math.PI * 2
 
     this.ballGroup.position.copy(sample.position)
     this.ballMesh.quaternion.setFromAxisAngle(spinAxis, angle)
@@ -520,7 +520,7 @@ function buildRenderState(snapshot: SimulationSnapshot, inputs: SimulationInputs
 
   return {
     samples,
-    spinAxis: toThreeVector(snapshot.spinAxis).normalize(),
+    spinAxis: toFlightLabDisplayVector(snapshot.spinAxis).normalize(),
     tubeColor,
     tubeRadius,
     peakForce: snapshot.metrics.magnusForceN,
@@ -532,14 +532,14 @@ function buildRenderState(snapshot: SimulationSnapshot, inputs: SimulationInputs
 function convertSample(sample: TrajectorySample): RenderSample {
   return {
     time: sample.time,
-    position: toThreeVector(sample.position),
-    velocity: toThreeVector(sample.velocity),
-    magnusForce: toThreeVector(sample.magnusForce),
+    position: toFlightLabDisplayVector(sample.position),
+    velocity: toFlightLabDisplayVector(sample.velocity),
+    magnusForce: toFlightLabDisplayVector(sample.magnusForce),
   }
 }
 
-function toThreeVector(vector: Vec3): THREE.Vector3 {
-  return new THREE.Vector3(vector.x, vector.y, vector.z)
+function toFlightLabDisplayVector(vector: Vec3): THREE.Vector3 {
+  return new THREE.Vector3(vector.x, -vector.y, vector.z)
 }
 
 function cloneState(state: RenderState): RenderState {
