@@ -73,7 +73,6 @@ class PitchSceneController {
   private readonly ballMesh: THREE.Mesh
   private readonly spinAxisLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   private readonly releaseGlow: THREE.Mesh
-  private readonly velocityArrow: THREE.ArrowHelper
   private readonly magnusArrow: THREE.ArrowHelper
   private readonly zoneBox: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>
   private readonly zoneGrid: THREE.LineSegments<
@@ -129,21 +128,13 @@ class PitchSceneController {
     const { mesh: releaseGlow, material: releaseGlowMaterial } = this.createReleaseGlow()
     this.releaseGlow = releaseGlow
     this.releaseGlowMaterial = releaseGlowMaterial
-    this.velocityArrow = new THREE.ArrowHelper(
-      new THREE.Vector3(1, 0, 0),
-      new THREE.Vector3(),
-      0.75,
-      0x6ee7f9,
-      0.18,
-      0.1,
-    )
     this.magnusArrow = new THREE.ArrowHelper(
       new THREE.Vector3(0, 0, 1),
       new THREE.Vector3(),
-      0.7,
-      0xffb347,
-      0.2,
-      0.11,
+      0.38,
+      0x38bdf8,
+      0.14,
+      0.1,
     )
 
     this.zoneBox = this.createStrikeZone()
@@ -193,7 +184,6 @@ class PitchSceneController {
     this.spinAxisLine.material.dispose()
     this.releaseGlow.geometry.dispose()
     this.releaseGlowMaterial.dispose()
-    disposeArrowHelper(this.velocityArrow)
     disposeArrowHelper(this.magnusArrow)
 
     this.zoneBox.geometry.dispose()
@@ -252,7 +242,6 @@ class PitchSceneController {
     this.scene.add(ground, lane, leftBox, rightBox, plate, this.zoneBox, this.zoneGrid, this.guideFan)
     this.scene.add(this.releaseGlow)
     this.scene.add(this.ballGroup)
-    this.scene.add(this.velocityArrow)
     this.scene.add(this.magnusArrow)
   }
 
@@ -473,8 +462,8 @@ class PitchSceneController {
     )
     this.trajectoryMaterial.color.copy(state.tubeColor)
     this.trajectoryMaterial.emissive.copy(state.tubeColor)
-    this.trajectoryMaterial.opacity = 0.62
-    this.trajectoryMaterial.emissiveIntensity = 0.04 + Math.min(state.peakForce / 1.6, 1) * 0.14
+    this.trajectoryMaterial.opacity = 0.28
+    this.trajectoryMaterial.emissiveIntensity = 0.02 + Math.min(state.peakForce / 1.6, 1) * 0.05
     this.trajectoryMesh = new THREE.Mesh(geometry, this.trajectoryMaterial)
     this.scene.add(this.trajectoryMesh)
   }
@@ -511,29 +500,23 @@ class PitchSceneController {
     this.ballGroup.position.copy(sample.position)
     this.ballMesh.quaternion.setFromAxisAngle(spinAxis, angle)
 
-    const speed = sample.velocity.length()
     const magnus = sample.magnusForce.length()
-
-    this.velocityArrow.position.copy(sample.position)
-    this.velocityArrow.setDirection(sample.velocity.clone().normalize())
-    this.velocityArrow.setLength(0.12 + speed * 0.008, 0.1, 0.08)
 
     this.magnusArrow.position.copy(sample.position)
     this.magnusArrow.setDirection(
       magnus > 0 ? sample.magnusForce.clone().normalize() : new THREE.Vector3(0, 0, 1),
     )
-    this.magnusArrow.setLength(0.1 + magnus * 1.75, 0.11, 0.08)
+    this.magnusArrow.setLength(0.18 + magnus * 0.72, 0.12, 0.115)
   }
 }
 
 function buildRenderState(snapshot: SimulationSnapshot, inputs: SimulationInputs): RenderState {
   const samples = resampleTrajectory(snapshot.samples, DISPLAY_SAMPLE_COUNT).map(convertSample)
   const forceRatio = Math.min(snapshot.metrics.magnusForceN / 1.55, 1)
-  const tubeColor = new THREE.Color(FORCE_LOW_COLOR).lerp(
-    new THREE.Color(FORCE_HIGH_COLOR),
-    forceRatio,
-  )
-  const tubeRadius = 0.04 + forceRatio * 0.05
+  const tubeColor = new THREE.Color(FORCE_LOW_COLOR)
+    .lerp(new THREE.Color(FORCE_HIGH_COLOR), forceRatio)
+    .lerp(new THREE.Color('#ffffff'), 0.46)
+  const tubeRadius = 0.018 + forceRatio * 0.018
 
   return {
     samples,

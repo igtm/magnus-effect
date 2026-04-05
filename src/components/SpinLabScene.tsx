@@ -364,10 +364,10 @@ class SpinLabSceneController {
     const spinAngle = (now / 1000) * spinRps * Math.PI * 2
     this.ballMesh.quaternion.setFromAxisAngle(this.currentState.spinAxis, spinAngle)
     this.bandGroup.quaternion.setFromUnitVectors(
-      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 1, 0),
       this.currentState.spinAxis.clone().normalize(),
     )
-    this.bandMesh.rotation.z = spinAngle
+    this.bandMesh.rotation.set(0, spinAngle, 0)
 
     const projectedMagnus = new THREE.Vector3(
       0,
