@@ -21,6 +21,8 @@ export interface SimulationInputs {
   spinRateRpm: number
   axisAzimuthDeg: number
   axisElevationDeg: number
+  releaseSideOffsetDeg: number
+  releaseLiftOffsetDeg: number
 }
 
 export interface TrajectorySample {
@@ -35,15 +37,29 @@ export interface SimulationMetrics {
   horizontalBreakIn: number
   verticalBreakIn: number
   magnusForceN: number
+  dragForceN: number
   spinEfficiencyPct: number
+}
+
+export interface LaunchAngles {
+  autoYawDeg: number
+  autoLiftDeg: number
+  appliedYawDeg: number
+  appliedLiftDeg: number
 }
 
 export interface SimulationSnapshot {
   samples: TrajectorySample[]
+  plateSample: TrajectorySample
   metrics: SimulationMetrics
   spinAxis: Vec3
   releasePosition: Vec3
   platePosition: Vec3
+  initialVelocity: Vec3
+  referenceDragForce: Vec3
+  referenceMagnusForce: Vec3
+  reachesPlate: boolean
+  launchAngles: LaunchAngles
 }
 
 export interface PitchPresetDefinition {
@@ -56,6 +72,8 @@ export interface PitchPresetDefinition {
     spinRateRpm: number
     axisAzimuthDeg: number
     axisElevationDeg: number
+    releaseSideOffsetDeg: number
+    releaseLiftOffsetDeg: number
   }
 }
 
@@ -67,13 +85,16 @@ const DRAG_COEFFICIENT = 0.35
 const RELEASE_SIDE_OFFSET_METERS = 0.55
 const RELEASE_HEIGHT_METERS = 1.85
 const PLATE_DISTANCE_METERS = 18.44
-const TARGET_HEIGHT_METERS = 1.75
+const TARGET_HEIGHT_METERS = 0.76
 const GRAVITY_METERS = 9.80665
 const SIMULATION_DT_SECONDS = 1 / 240
 const MAX_SIMULATION_SECONDS = 1.4
 const METERS_TO_INCHES = 39.3701
 const MPH_TO_METERS_PER_SECOND = 0.44704
 const RPM_TO_RAD_PER_SECOND = (Math.PI * 2) / 60
+const PLATE_EPSILON_METERS = 0.03
+const LAUNCH_SOLVER_STEP_DEG = 0.35
+const LAUNCH_SOLVER_MAX_DEG = 2.4
 
 const TARGET_POINT: Vec3 = {
   x: PLATE_DISTANCE_METERS,
@@ -86,60 +107,70 @@ export const PRESET_DEFINITIONS: PitchPresetDefinition[] = [
     id: 'four-seam',
     label: 'Four-Seam',
     shortLabel: '4S',
-    summary: 'High carry with minimal lateral movement.',
+    summary: 'Carry through the zone with minimal side drift.',
     defaults: {
       velocityMph: 95,
       spinRateRpm: 2400,
       axisAzimuthDeg: -90,
       axisElevationDeg: 7,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
     },
   },
   {
     id: 'sinker',
     label: 'Sinker',
     shortLabel: 'SI',
-    summary: 'Late drop with arm-side run.',
+    summary: 'Arm-side run paired with late drop.',
     defaults: {
       velocityMph: 93,
       spinRateRpm: 2100,
       axisAzimuthDeg: 90,
       axisElevationDeg: 24,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
     },
   },
   {
     id: 'slider',
     label: 'Slider',
     shortLabel: 'SL',
-    summary: 'Glove-side sweep with sharp, late tilt.',
+    summary: 'Glove-side sweep with hard tilt.',
     defaults: {
       velocityMph: 85,
       spinRateRpm: 2500,
       axisAzimuthDeg: 90,
       axisElevationDeg: -33,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
     },
   },
   {
     id: 'curveball',
     label: 'Curveball',
     shortLabel: 'CB',
-    summary: 'Heavy topspin drop with a touch of glove-side pull.',
+    summary: 'Topspin drop that still finishes through the plate.',
     defaults: {
       velocityMph: 82,
       spinRateRpm: 2550,
       axisAzimuthDeg: 138,
       axisElevationDeg: -10,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
     },
   },
   {
     id: 'changeup',
     label: 'Changeup',
     shortLabel: 'CH',
-    summary: 'Reduced speed with fading arm-side action.',
+    summary: 'Reduced speed with arm-side fade and sink.',
     defaults: {
       velocityMph: 84,
       spinRateRpm: 1750,
       axisAzimuthDeg: 90,
       axisElevationDeg: 18,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
     },
   },
 ]
@@ -171,6 +202,8 @@ export function getPresetInputs(
           spinRateRpm: preset.defaults.spinRateRpm,
           axisAzimuthDeg: preset.defaults.axisAzimuthDeg,
           axisElevationDeg: preset.defaults.axisElevationDeg,
+          releaseSideOffsetDeg: -preset.defaults.releaseSideOffsetDeg,
+          releaseLiftOffsetDeg: preset.defaults.releaseLiftOffsetDeg,
         })
 
   return {
@@ -180,33 +213,74 @@ export function getPresetInputs(
   }
 }
 
-export function simulatePitch(inputs: SimulationInputs): SimulationSnapshot {
-  const releasePosition = getReleasePosition(inputs.handedness)
-  const travelDirection = normalize(subtract(TARGET_POINT, releasePosition))
-  const spinAxis = axisFromAngles(inputs.axisAzimuthDeg, inputs.axisElevationDeg)
-  const forwardVelocity = scale(travelDirection, inputs.velocityMph * MPH_TO_METERS_PER_SECOND)
-  const spinVector = scale(spinAxis, inputs.spinRateRpm * RPM_TO_RAD_PER_SECOND)
-  const samples = simulateCore(releasePosition, forwardVelocity, spinVector)
-  const spinlessSamples = simulateCore(releasePosition, forwardVelocity, zero())
-  const finalSample = getSampleAtPlate(samples)
-  const spinlessFinal = getSampleAtPlate(spinlessSamples)
-  const peakMagnusForce = samples.reduce((max, sample) => {
-    return Math.max(max, magnitude(sample.magnusForce))
-  }, 0)
-  const spinEfficiency = computeSpinEfficiency(spinAxis, travelDirection)
+export function mirrorCustomInputs(
+  inputs: SimulationInputs,
+  handedness: Handedness,
+): SimulationInputs {
+  if (handedness === inputs.handedness) {
+    return inputs
+  }
+
+  const mirrored = mirrorPresetAxis({
+    velocityMph: inputs.velocityMph,
+    spinRateRpm: inputs.spinRateRpm,
+    axisAzimuthDeg: inputs.axisAzimuthDeg,
+    axisElevationDeg: inputs.axisElevationDeg,
+    releaseSideOffsetDeg: -inputs.releaseSideOffsetDeg,
+    releaseLiftOffsetDeg: inputs.releaseLiftOffsetDeg,
+  })
 
   return {
-    samples,
+    ...inputs,
+    handedness,
+    ...mirrored,
+  }
+}
+
+export function simulatePitch(inputs: SimulationInputs): SimulationSnapshot {
+  const releasePosition = getReleasePosition(inputs.handedness)
+  const spinAxis = axisFromAngles(inputs.axisAzimuthDeg, inputs.axisElevationDeg)
+  const spinVector = scale(spinAxis, inputs.spinRateRpm * RPM_TO_RAD_PER_SECOND)
+  const launchAngles = solveLaunchAngles(inputs, releasePosition, spinVector)
+  const initialVelocity = velocityFromAngles(
+    inputs.velocityMph * MPH_TO_METERS_PER_SECOND,
+    launchAngles.appliedYawDeg,
+    launchAngles.appliedLiftDeg,
+  )
+  const displaySamples = simulateCore(releasePosition, initialVelocity, spinVector, true)
+  const plateSamples = simulateCore(releasePosition, initialVelocity, spinVector, false)
+  const spinlessPlateSamples = simulateCore(releasePosition, initialVelocity, zero(), false)
+  const plateSample = getSampleAtPlate(plateSamples)
+  const spinlessPlateSample = getSampleAtPlate(spinlessPlateSamples)
+  const referenceDragForce = computeDragForce(initialVelocity)
+  const referenceMagnusForce = computeMagnusForce(initialVelocity, spinVector)
+  const peakMagnusForce = plateSamples.reduce((max, sample) => {
+    return Math.max(max, magnitude(sample.magnusForce))
+  }, 0)
+  const spinEfficiency = computeSpinEfficiency(spinAxis, normalize(initialVelocity))
+  const reachesPlate =
+    displaySamples[displaySamples.length - 1].position.x >=
+    PLATE_DISTANCE_METERS - PLATE_EPSILON_METERS
+
+  return {
+    samples: displaySamples,
+    plateSample,
     spinAxis,
     releasePosition,
-    platePosition: finalSample.position,
+    platePosition: plateSample.position,
+    initialVelocity,
+    referenceDragForce,
+    referenceMagnusForce,
+    reachesPlate,
+    launchAngles,
     metrics: {
-      flightTimeMs: finalSample.time * 1000,
+      flightTimeMs: plateSample.time * 1000,
       horizontalBreakIn:
-        (finalSample.position.y - spinlessFinal.position.y) * METERS_TO_INCHES,
+        (plateSample.position.y - spinlessPlateSample.position.y) * METERS_TO_INCHES,
       verticalBreakIn:
-        (finalSample.position.z - spinlessFinal.position.z) * METERS_TO_INCHES,
+        (plateSample.position.z - spinlessPlateSample.position.z) * METERS_TO_INCHES,
       magnusForceN: peakMagnusForce,
+      dragForceN: magnitude(referenceDragForce),
       spinEfficiencyPct: spinEfficiency * 100,
     },
   }
@@ -255,9 +329,14 @@ export function formatBreakLabel(
 export function describeAxisEffect(
   inputs: SimulationInputs,
   metrics: SimulationMetrics,
+  reachesPlate: boolean,
 ): string[] {
   const lines: string[] = []
   const verticalMagnitude = Math.abs(metrics.verticalBreakIn)
+
+  if (!reachesPlate) {
+    lines.push('This release choice bounces early, so the displayed path is clipped at the dirt.')
+  }
 
   if (verticalMagnitude < 1.5) {
     lines.push('The current axis stays close to neutral ride versus drop.')
@@ -295,6 +374,43 @@ export function describeAxisEffect(
   return lines
 }
 
+export function describeSpinLab(snapshot: SimulationSnapshot): string[] {
+  const notes: string[] = []
+  const magnusDirection = dominantAxis(snapshot.referenceMagnusForce)
+  const windSpeedMph =
+    magnitude(snapshot.initialVelocity) / MPH_TO_METERS_PER_SECOND
+
+  notes.push(
+    `Relative wind is set to ${roundTo(windSpeedMph, 0)} mph, matching the release speed.`,
+  )
+
+  if (magnusDirection.axis === 'z') {
+    notes.push(
+      magnusDirection.sign > 0
+        ? 'Upper and lower flow split is generating upward lift.'
+        : 'Upper and lower flow split is generating downward force.',
+    )
+  } else if (magnusDirection.axis === 'y') {
+    notes.push(
+      magnusDirection.sign > 0
+        ? 'Flow is biased toward arm-side movement.'
+        : 'Flow is biased toward glove-side movement.',
+    )
+  } else {
+    notes.push('Most of the force stays aligned with the travel axis, so visible break stays muted.')
+  }
+
+  if (snapshot.metrics.spinEfficiencyPct > 90) {
+    notes.push('The spin axis is nearly perpendicular to travel, so the airflow asymmetry is strong.')
+  } else if (snapshot.metrics.spinEfficiencyPct < 55) {
+    notes.push('A large share of the spin is gyro-like, which softens the Magnus response.')
+  } else {
+    notes.push('The spin axis is mixed, so the airflow bends without becoming fully lift-dominant.')
+  }
+
+  return notes
+}
+
 export function clampValue(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
@@ -312,10 +428,100 @@ export function getReleasePosition(handedness: Handedness): Vec3 {
   }
 }
 
+function solveLaunchAngles(
+  inputs: SimulationInputs,
+  releasePosition: Vec3,
+  spinVector: Vec3,
+): LaunchAngles {
+  const directVector = subtract(TARGET_POINT, releasePosition)
+  let yawDeg = (Math.atan2(directVector.y, directVector.x) * 180) / Math.PI
+  let liftDeg =
+    (Math.atan2(directVector.z, Math.hypot(directVector.x, directVector.y)) * 180) /
+    Math.PI
+  const speedMps = inputs.velocityMph * MPH_TO_METERS_PER_SECOND
+
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    const center = sampleAtPlateForLaunch(releasePosition, speedMps, spinVector, yawDeg, liftDeg)
+    const errorY = center.position.y - TARGET_POINT.y
+    const errorZ = center.position.z - TARGET_POINT.z
+
+    if (Math.hypot(errorY, errorZ) < 0.01) {
+      break
+    }
+
+    const yawOffset = sampleAtPlateForLaunch(
+      releasePosition,
+      speedMps,
+      spinVector,
+      yawDeg + LAUNCH_SOLVER_STEP_DEG,
+      liftDeg,
+    )
+    const liftOffset = sampleAtPlateForLaunch(
+      releasePosition,
+      speedMps,
+      spinVector,
+      yawDeg,
+      liftDeg + LAUNCH_SOLVER_STEP_DEG,
+    )
+    const jacobian = {
+      yy: (yawOffset.position.y - center.position.y) / LAUNCH_SOLVER_STEP_DEG,
+      yz: (liftOffset.position.y - center.position.y) / LAUNCH_SOLVER_STEP_DEG,
+      zy: (yawOffset.position.z - center.position.z) / LAUNCH_SOLVER_STEP_DEG,
+      zz: (liftOffset.position.z - center.position.z) / LAUNCH_SOLVER_STEP_DEG,
+    }
+    const determinant = jacobian.yy * jacobian.zz - jacobian.yz * jacobian.zy
+
+    if (Math.abs(determinant) < 0.0001) {
+      break
+    }
+
+    const yawCorrection =
+      (-errorY * jacobian.zz + errorZ * jacobian.yz) / determinant
+    const liftCorrection =
+      (-jacobian.yy * errorZ + jacobian.zy * errorY) / determinant
+
+    yawDeg += clampValue(yawCorrection, -LAUNCH_SOLVER_MAX_DEG, LAUNCH_SOLVER_MAX_DEG)
+    liftDeg += clampValue(liftCorrection, -LAUNCH_SOLVER_MAX_DEG, LAUNCH_SOLVER_MAX_DEG)
+  }
+
+  return {
+    autoYawDeg: yawDeg,
+    autoLiftDeg: liftDeg,
+    appliedYawDeg: yawDeg + inputs.releaseSideOffsetDeg,
+    appliedLiftDeg: liftDeg + inputs.releaseLiftOffsetDeg,
+  }
+}
+
+function sampleAtPlateForLaunch(
+  releasePosition: Vec3,
+  speedMps: number,
+  spinVector: Vec3,
+  yawDeg: number,
+  liftDeg: number,
+): TrajectorySample {
+  const initialVelocity = velocityFromAngles(speedMps, yawDeg, liftDeg)
+  const samples = simulateCore(releasePosition, initialVelocity, spinVector, false)
+
+  return getSampleAtPlate(samples)
+}
+
+function velocityFromAngles(speedMps: number, yawDeg: number, liftDeg: number): Vec3 {
+  const yaw = (yawDeg * Math.PI) / 180
+  const lift = (liftDeg * Math.PI) / 180
+  const cosLift = Math.cos(lift)
+
+  return {
+    x: speedMps * cosLift * Math.cos(yaw),
+    y: speedMps * cosLift * Math.sin(yaw),
+    z: speedMps * Math.sin(lift),
+  }
+}
+
 function simulateCore(
   releasePosition: Vec3,
   initialVelocity: Vec3,
   spinVector: Vec3,
+  stopAtGround: boolean,
 ): TrajectorySample[] {
   const samples: TrajectorySample[] = []
   let position = clone(releasePosition)
@@ -332,7 +538,7 @@ function simulateCore(
   while (
     time < MAX_SIMULATION_SECONDS &&
     position.x < PLATE_DISTANCE_METERS &&
-    position.z > 0
+    (!stopAtGround || position.z > 0)
   ) {
     const dragForce = computeDragForce(velocity)
     const magnusForce = computeMagnusForce(velocity, spinVector)
@@ -355,10 +561,13 @@ function simulateCore(
     })
   }
 
-  return projectTerminalSample(samples)
+  return projectTerminalSample(samples, stopAtGround)
 }
 
-function projectTerminalSample(samples: TrajectorySample[]): TrajectorySample[] {
+function projectTerminalSample(
+  samples: TrajectorySample[],
+  stopAtGround: boolean,
+): TrajectorySample[] {
   if (samples.length < 2) {
     return samples
   }
@@ -374,7 +583,7 @@ function projectTerminalSample(samples: TrajectorySample[]): TrajectorySample[] 
     return projected
   }
 
-  if (current.position.z <= 0) {
+  if (stopAtGround && current.position.z <= 0) {
     const span = current.position.z - previous.position.z
     const ratio = span === 0 ? 1 : (0 - previous.position.z) / span
     projected.push(interpolateSamples(previous, current, ratio))
@@ -433,6 +642,8 @@ function interpolateSamples(
 function mirrorPresetAxis<T extends {
   axisAzimuthDeg: number
   axisElevationDeg: number
+  releaseSideOffsetDeg: number
+  releaseLiftOffsetDeg: number
 }>(defaults: T): T {
   const axis = axisFromAngles(defaults.axisAzimuthDeg, defaults.axisElevationDeg)
   const mirroredAxis = {
@@ -513,6 +724,25 @@ function computeMagnusForce(velocity: Vec3, spinVector: Vec3): Vec3 {
     0.5 * AIR_DENSITY * liftCoefficient * BALL_AREA_METERS * speed ** 2
 
   return scale(spinDirection, magnusMagnitude)
+}
+
+function dominantAxis(vector: Vec3): {
+  axis: 'x' | 'y' | 'z'
+  sign: number
+} {
+  const absX = Math.abs(vector.x)
+  const absY = Math.abs(vector.y)
+  const absZ = Math.abs(vector.z)
+
+  if (absX >= absY && absX >= absZ) {
+    return { axis: 'x', sign: Math.sign(vector.x) || 1 }
+  }
+
+  if (absY >= absZ) {
+    return { axis: 'y', sign: Math.sign(vector.y) || 1 }
+  }
+
+  return { axis: 'z', sign: Math.sign(vector.z) || 1 }
 }
 
 function zero(): Vec3 {

@@ -11,6 +11,8 @@ describe('simulatePitch', () => {
       spinRateRpm: 0,
       axisAzimuthDeg: -90,
       axisElevationDeg: 0,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
     })
 
     expect(snapshot.metrics.magnusForceN).toBeLessThan(0.0001)
@@ -22,6 +24,8 @@ describe('simulatePitch', () => {
     const fourSeam = simulatePitch(getPresetInputs('four-seam', 'RHP'))
     const curveball = simulatePitch(getPresetInputs('curveball', 'RHP'))
 
+    expect(fourSeam.reachesPlate).toBe(true)
+    expect(curveball.reachesPlate).toBe(true)
     expect(fourSeam.metrics.verticalBreakIn).toBeGreaterThan(0)
     expect(curveball.metrics.verticalBreakIn).toBeLessThan(0)
     expect(fourSeam.metrics.verticalBreakIn).toBeGreaterThan(
@@ -33,6 +37,8 @@ describe('simulatePitch', () => {
     const rightHandedSlider = simulatePitch(getPresetInputs('slider', 'RHP'))
     const leftHandedSlider = simulatePitch(getPresetInputs('slider', 'LHP'))
 
+    expect(rightHandedSlider.reachesPlate).toBe(true)
+    expect(leftHandedSlider.reachesPlate).toBe(true)
     expect(rightHandedSlider.metrics.horizontalBreakIn).toBeLessThan(0)
     expect(leftHandedSlider.metrics.horizontalBreakIn).toBeGreaterThan(0)
     expect(
@@ -51,6 +57,8 @@ describe('simulatePitch', () => {
       spinRateRpm: 2200,
       axisAzimuthDeg: -90,
       axisElevationDeg: 10,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
     })
     const faster = simulatePitch({
       presetId: 'custom',
@@ -59,8 +67,19 @@ describe('simulatePitch', () => {
       spinRateRpm: 2200,
       axisAzimuthDeg: -90,
       axisElevationDeg: 10,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
     })
 
     expect(faster.metrics.flightTimeMs).toBeLessThan(slower.metrics.flightTimeMs)
+  })
+
+  it('keeps every built-in preset reaching the plate with auto-aim', () => {
+    for (const presetId of ['four-seam', 'sinker', 'slider', 'curveball', 'changeup'] as const) {
+      const snapshot = simulatePitch(getPresetInputs(presetId, 'RHP'))
+      expect(snapshot.reachesPlate).toBe(true)
+      expect(snapshot.platePosition.x).toBeGreaterThan(18.43)
+      expect(snapshot.platePosition.z).toBeGreaterThan(0.1)
+    }
   })
 })

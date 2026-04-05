@@ -1,15 +1,18 @@
-import { For, createMemo, createSignal } from 'solid-js'
+import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js'
 
 import PitchScene from './components/PitchScene'
+import SpinLabScene from './components/SpinLabScene'
 import './App.css'
 import {
   DEFAULT_PRESET_ID,
   PRESET_DEFINITIONS,
   clampValue,
   describeAxisEffect,
+  describeSpinLab,
   formatBreakLabel,
   getPresetDefinition,
   getPresetInputs,
+  mirrorCustomInputs,
   roundTo,
   simulatePitch,
   type Handedness,
@@ -18,8 +21,10 @@ import {
 } from './lib/simulation'
 
 type BuiltInPresetId = Exclude<PitchPresetId, 'custom'>
+type ViewMode = 'flight' | 'spin-lab'
 
 function App() {
+  const [viewMode, setViewMode] = createSignal<ViewMode>('flight')
   const [inputs, setInputs] = createSignal<SimulationInputs>(
     getPresetInputs(DEFAULT_PRESET_ID as BuiltInPresetId, 'RHP'),
   )
@@ -33,10 +38,13 @@ function App() {
       ? undefined
       : getPresetDefinition(current.presetId as BuiltInPresetId)
   })
-  const insights = createMemo(() => describeAxisEffect(inputs(), metrics()))
+  const flightInsights = createMemo(() =>
+    describeAxisEffect(inputs(), metrics(), snapshot().reachesPlate),
+  )
+  const spinInsights = createMemo(() => describeSpinLab(snapshot()))
   const currentPresetLabel = createMemo(() => activePreset()?.label ?? 'Custom Mix')
   const currentPresetSummary = createMemo(
-    () => activePreset()?.summary ?? 'Manual axis and spin edits are driving this shape.',
+    () => activePreset()?.summary ?? 'Manual axis, loft, and side aim are shaping this pitch.',
   )
   const movementDescriptor = createMemo(() =>
     formatBreakLabel(inputs().handedness, metrics().horizontalBreakIn),
@@ -52,6 +60,9 @@ function App() {
 
     return 'Neutral vertical plane'
   })
+  const plateHeightLabel = createMemo(
+    () => `${roundTo(snapshot().platePosition.z * 39.3701, 1).toFixed(1)} in`,
+  )
 
   const selectPreset = (presetId: BuiltInPresetId) => {
     setInputs(getPresetInputs(presetId, inputs().handedness))
@@ -61,10 +72,7 @@ function App() {
     const current = inputs()
 
     if (current.presetId === 'custom') {
-      setInputs({
-        ...current,
-        handedness,
-      })
+      setInputs(mirrorCustomInputs(current, handedness))
       return
     }
 
@@ -74,7 +82,12 @@ function App() {
   const updateNumericInput = <
     Key extends keyof Pick<
       SimulationInputs,
-      'velocityMph' | 'spinRateRpm' | 'axisAzimuthDeg' | 'axisElevationDeg'
+      | 'velocityMph'
+      | 'spinRateRpm'
+      | 'axisAzimuthDeg'
+      | 'axisElevationDeg'
+      | 'releaseSideOffsetDeg'
+      | 'releaseLiftOffsetDeg'
     >,
   >(
     key: Key,
@@ -98,62 +111,114 @@ function App() {
         <section class="relative flex min-h-[42rem] flex-1 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_36px_140px_rgba(3,9,23,0.75)] backdrop-blur-sm">
           <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(24,40,67,0.92)_0%,rgba(6,14,26,0.45)_34%,rgba(6,14,26,0.2)_100%)]" />
           <div class="relative z-10 flex min-h-full w-full flex-col">
-            <div class="flex flex-col justify-between gap-5 px-5 pb-2 pt-5 sm:px-7 sm:pt-7 lg:flex-row lg:items-start">
-              <div class="max-w-xl">
-                <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.4em] text-cyan-200/80">
-                  Magnus Effect
-                </p>
-                <h1 class="mt-3 max-w-[12ch] font-[var(--font-display)] text-4xl font-semibold leading-[0.92] text-white sm:text-5xl xl:text-[4.3rem]">
-                  Shape a pitch. Watch the force.
-                </h1>
-                <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                  Drive velocity, spin, and axis in real time. The seam rotation, path tilt,
-                  and force vectors all update together so the pitch shape reads instantly.
-                </p>
-              </div>
+            <div class="flex flex-col gap-5 px-5 pb-2 pt-5 sm:px-7 sm:pt-7">
+              <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div class="max-w-xl">
+                  <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.4em] text-cyan-200/80">
+                    Magnus Effect
+                  </p>
+                  <h1 class="mt-3 max-w-[12ch] font-[var(--font-display)] text-4xl font-semibold leading-[0.92] text-white sm:text-5xl xl:text-[4.3rem]">
+                    {viewMode() === 'flight' ? 'Shape a pitch. Watch the force.' : 'Freeze the ball. Reveal the force field.'}
+                  </h1>
+                  <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+                    <Show
+                      when={viewMode() === 'flight'}
+                      fallback="Hold the baseball in a wind tunnel view. The live spin axis, airflow split, drag, and Magnus vectors reveal why the force bends the path."
+                    >
+                      Auto-aim keeps the selected pitch finishing at the plate, while side and loft offsets let you bias the release angle without losing the physics readout.
+                    </Show>
+                  </p>
+                </div>
 
-              <div class="flex max-w-[18rem] flex-col items-start gap-3 self-start rounded-[1.35rem] border border-white/10 bg-white/[0.04] px-4 py-3 backdrop-blur">
-                <span class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.32em] text-slate-400">
-                  Live profile
-                </span>
-                <div>
-                  <div class="font-[var(--font-display)] text-2xl font-medium text-white">
-                    {currentPresetLabel()}
+                <div class="flex max-w-[24rem] flex-col gap-3 self-start rounded-[1.35rem] border border-white/10 bg-white/[0.04] px-4 py-3 backdrop-blur">
+                  <div class="flex flex-wrap gap-2">
+                    <ModeButton
+                      label="Flight Lab"
+                      active={viewMode() === 'flight'}
+                      onClick={() => setViewMode('flight')}
+                    />
+                    <ModeButton
+                      label="Spin Lab"
+                      active={viewMode() === 'spin-lab'}
+                      onClick={() => setViewMode('spin-lab')}
+                    />
                   </div>
-                  <p class="mt-1 text-sm leading-6 text-slate-300">{currentPresetSummary()}</p>
+                  <div>
+                    <span class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.32em] text-slate-400">
+                      Live profile
+                    </span>
+                    <div class="mt-2 font-[var(--font-display)] text-2xl font-medium text-white">
+                      {currentPresetLabel()}
+                    </div>
+                    <p class="mt-1 text-sm leading-6 text-slate-300">{currentPresetSummary()}</p>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div class="relative flex-1 px-2 pb-2 sm:px-4 sm:pb-4">
-              <PitchScene snapshot={snapshot()} inputs={inputs()} />
+              <Switch>
+                <Match when={viewMode() === 'flight'}>
+                  <PitchScene snapshot={snapshot()} inputs={inputs()} />
+                </Match>
+                <Match when={viewMode() === 'spin-lab'}>
+                  <SpinLabScene snapshot={snapshot()} inputs={inputs()} />
+                </Match>
+              </Switch>
+
               <div class="pointer-events-none absolute inset-x-6 bottom-5 hidden justify-between gap-4 rounded-[1.4rem] border border-white/10 bg-[#061320]/55 px-5 py-3 backdrop-blur md:flex">
-                <LiveStrip
-                  label="Velocity"
-                  value={`${roundTo(inputs().velocityMph, 0)} mph`}
-                  hint="Release speed"
-                />
-                <LiveStrip
-                  label="Spin"
-                  value={`${roundTo(inputs().spinRateRpm, 0)} rpm`}
-                  hint="Seam rotation"
-                />
-                <LiveStrip
-                  label="Flight"
-                  value={`${roundTo(metrics().flightTimeMs, 0)} ms`}
-                  hint="Release to plate"
-                />
-                <LiveStrip
-                  label="Peak Magnus"
-                  value={`${roundTo(metrics().magnusForceN, 2).toFixed(2)} N`}
-                  hint="Max force cue"
-                />
+                <Switch>
+                  <Match when={viewMode() === 'flight'}>
+                    <LiveStrip
+                      label="Velocity"
+                      value={`${roundTo(inputs().velocityMph, 0)} mph`}
+                      hint="Release speed"
+                    />
+                    <LiveStrip
+                      label="Travel"
+                      value={`${roundTo(metrics().flightTimeMs, 0)} ms`}
+                      hint="Release to plate"
+                    />
+                    <LiveStrip
+                      label="Plate height"
+                      value={plateHeightLabel()}
+                      hint={snapshot().reachesPlate ? 'Crosses home plate' : 'Bounces before plate'}
+                    />
+                    <LiveStrip
+                      label="Aim"
+                      value={`${formatSigned(snapshot().launchAngles.appliedLiftDeg, 'deg')} lift`}
+                      hint={`${formatSigned(snapshot().launchAngles.appliedYawDeg, 'deg')} side`}
+                    />
+                  </Match>
+                  <Match when={viewMode() === 'spin-lab'}>
+                    <LiveStrip
+                      label="Relative wind"
+                      value={`${roundTo(inputs().velocityMph, 0)} mph`}
+                      hint="Air speed over the ball"
+                    />
+                    <LiveStrip
+                      label="Spin"
+                      value={`${roundTo(inputs().spinRateRpm, 0)} rpm`}
+                      hint="Seam rotation"
+                    />
+                    <LiveStrip
+                      label="Magnus"
+                      value={`${roundTo(metrics().magnusForceN, 2).toFixed(2)} N`}
+                      hint="Reference force"
+                    />
+                    <LiveStrip
+                      label="Drag"
+                      value={`${roundTo(metrics().dragForceN, 2).toFixed(2)} N`}
+                      hint="Opposes the wind"
+                    />
+                  </Match>
+                </Switch>
               </div>
             </div>
           </div>
         </section>
 
-        <aside class="relative w-full shrink-0 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-sm xl:w-[26rem]">
+        <aside class="relative w-full shrink-0 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_90px_rgba(0,0,0,0.42)] backdrop-blur-sm xl:w-[27rem]">
           <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.01)_100%)]" />
           <div class="relative flex h-full flex-col">
             <section class="border-b border-white/8 px-5 pb-5 pt-5 sm:px-6 sm:pb-6 sm:pt-6">
@@ -207,46 +272,77 @@ function App() {
             </section>
 
             <section class="border-b border-white/8 px-5 py-5 sm:px-6 sm:py-6">
-              <div class="flex items-end justify-between gap-4">
-                <div>
-                  <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.32em] text-slate-400">
-                    Movement readout
-                  </p>
-                  <h2 class="mt-2 font-[var(--font-display)] text-2xl font-medium text-white">
-                    Pitch outcome
-                  </h2>
-                </div>
-                <span class="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.28em] text-cyan-100">
-                  {inputs().presetId === 'custom' ? 'Custom' : inputs().handedness}
-                </span>
-              </div>
+              <Switch>
+                <Match when={viewMode() === 'flight'}>
+                  <SectionHeader
+                    eyebrow="Movement readout"
+                    title="Pitch outcome"
+                    badge={snapshot().reachesPlate ? 'Plate reach' : 'Bounce early'}
+                    badgeTone={snapshot().reachesPlate ? 'cyan' : 'amber'}
+                  />
+                  <div class="mt-5 space-y-4">
+                    <MetricRail
+                      label="Vertical break"
+                      value={formatSigned(metrics().verticalBreakIn, 'in')}
+                      sublabel={verticalDescriptor()}
+                      ratio={clampValue((metrics().verticalBreakIn + 26) / 52, 0, 1)}
+                    />
+                    <MetricRail
+                      label="Horizontal break"
+                      value={formatSigned(metrics().horizontalBreakIn, 'in')}
+                      sublabel={movementDescriptor()}
+                      ratio={clampValue((Math.abs(metrics().horizontalBreakIn) + 1) / 22, 0, 1)}
+                    />
+                    <MetricRail
+                      label="Plate height"
+                      value={plateHeightLabel()}
+                      sublabel="Crossing height at the front edge of home plate."
+                      ratio={clampValue(snapshot().platePosition.z / 1.7, 0, 1)}
+                    />
+                    <MetricRail
+                      label="Spin efficiency"
+                      value={`${roundTo(metrics().spinEfficiencyPct, 0)}%`}
+                      sublabel="Spin acting perpendicular to travel."
+                      ratio={clampValue(metrics().spinEfficiencyPct / 100, 0, 1)}
+                    />
+                  </div>
+                </Match>
 
-              <div class="mt-5 space-y-4">
-                <MetricRail
-                  label="Vertical break"
-                  value={formatSigned(metrics().verticalBreakIn, 'in')}
-                  sublabel={verticalDescriptor()}
-                  ratio={clampValue((metrics().verticalBreakIn + 22) / 44, 0, 1)}
-                />
-                <MetricRail
-                  label="Horizontal break"
-                  value={formatSigned(metrics().horizontalBreakIn, 'in')}
-                  sublabel={movementDescriptor()}
-                  ratio={clampValue((Math.abs(metrics().horizontalBreakIn) + 1) / 20, 0, 1)}
-                />
-                <MetricRail
-                  label="Peak Magnus"
-                  value={`${roundTo(metrics().magnusForceN, 2).toFixed(2)} N`}
-                  sublabel="Maximum lift-force magnitude along the flight."
-                  ratio={clampValue(metrics().magnusForceN / 1.5, 0, 1)}
-                />
-                <MetricRail
-                  label="Spin efficiency"
-                  value={`${roundTo(metrics().spinEfficiencyPct, 0)}%`}
-                  sublabel="Share of spin acting perpendicular to travel."
-                  ratio={clampValue(metrics().spinEfficiencyPct / 100, 0, 1)}
-                />
-              </div>
+                <Match when={viewMode() === 'spin-lab'}>
+                  <SectionHeader
+                    eyebrow="Force readout"
+                    title="Wind tunnel"
+                    badge={`${roundTo(inputs().velocityMph, 0)} mph`}
+                    badgeTone="cyan"
+                  />
+                  <div class="mt-5 space-y-4">
+                    <MetricRail
+                      label="Magnus force"
+                      value={`${roundTo(metrics().magnusForceN, 2).toFixed(2)} N`}
+                      sublabel="Lift generated by spin and airflow asymmetry."
+                      ratio={clampValue(metrics().magnusForceN / 1.6, 0, 1)}
+                    />
+                    <MetricRail
+                      label="Drag force"
+                      value={`${roundTo(metrics().dragForceN, 2).toFixed(2)} N`}
+                      sublabel="Force opposing the relative wind."
+                      ratio={clampValue(metrics().dragForceN / 1.4, 0, 1)}
+                    />
+                    <MetricRail
+                      label="Spin efficiency"
+                      value={`${roundTo(metrics().spinEfficiencyPct, 0)}%`}
+                      sublabel="How much of the spin feeds visible force."
+                      ratio={clampValue(metrics().spinEfficiencyPct / 100, 0, 1)}
+                    />
+                    <MetricRail
+                      label="Release axis"
+                      value={`${roundTo(inputs().axisAzimuthDeg, 0)} / ${roundTo(inputs().axisElevationDeg, 0)} deg`}
+                      sublabel="Azimuth and elevation of the spin axis."
+                      ratio={clampValue((Math.abs(inputs().axisElevationDeg) + 10) / 80, 0, 1)}
+                    />
+                  </div>
+                </Match>
+              </Switch>
             </section>
 
             <section class="border-b border-white/8 px-5 py-5 sm:px-6 sm:py-6">
@@ -294,25 +390,65 @@ function App() {
                   step={1}
                   onInput={(value) => updateNumericInput('axisElevationDeg', value)}
                 />
+                <Show when={viewMode() === 'flight'}>
+                  <RangeField
+                    label="Side aim offset"
+                    value={inputs().releaseSideOffsetDeg}
+                    valueLabel={formatSigned(inputs().releaseSideOffsetDeg, 'deg')}
+                    min={-4}
+                    max={4}
+                    step={0.1}
+                    onInput={(value) => updateNumericInput('releaseSideOffsetDeg', value)}
+                  />
+                  <RangeField
+                    label="Lift offset"
+                    value={inputs().releaseLiftOffsetDeg}
+                    valueLabel={formatSigned(inputs().releaseLiftOffsetDeg, 'deg')}
+                    min={-6}
+                    max={6}
+                    step={0.1}
+                    onInput={(value) => updateNumericInput('releaseLiftOffsetDeg', value)}
+                  />
+                </Show>
               </div>
 
-              <p class="mt-5 text-sm leading-6 text-slate-300">
-                Azimuth rotates the spin axis around the ball. Elevation tilts that axis into
-                ride, drop, run, or sweep.
-              </p>
+              <Switch>
+                <Match when={viewMode() === 'flight'}>
+                  <div class="mt-5 rounded-[1.2rem] border border-white/8 bg-black/15 p-4">
+                    <div class="flex items-center justify-between gap-4">
+                      <span class="font-[var(--font-mono)] text-[0.62rem] uppercase tracking-[0.26em] text-slate-400">
+                        Solved release
+                      </span>
+                      <span class="font-[var(--font-display)] text-lg text-white">
+                        {formatSigned(snapshot().launchAngles.appliedLiftDeg, 'deg')} lift
+                      </span>
+                    </div>
+                    <p class="mt-2 text-sm leading-6 text-slate-300">
+                      Auto-aim solves the baseline path back to plate center. Side and lift sliders
+                      then bias the launch by hand.
+                    </p>
+                  </div>
+                </Match>
+                <Match when={viewMode() === 'spin-lab'}>
+                  <p class="mt-5 text-sm leading-6 text-slate-300">
+                    Spin Lab inherits the same speed and axis inputs, then freezes the baseball so
+                    the airflow asymmetry can be inspected directly.
+                  </p>
+                </Match>
+              </Switch>
             </section>
 
             <section class="px-5 py-5 sm:px-6 sm:py-6">
               <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.32em] text-slate-400">
-                Axis notes
+                {viewMode() === 'flight' ? 'Axis notes' : 'Flow notes'}
               </p>
               <h2 class="mt-2 font-[var(--font-display)] text-2xl font-medium text-white">
-                What this axis does
+                {viewMode() === 'flight' ? 'What this axis does' : 'What this flow means'}
               </h2>
 
               <div class="mt-5 rounded-[1.5rem] border border-amber-300/10 bg-[linear-gradient(180deg,rgba(255,179,71,0.12)_0%,rgba(255,179,71,0.03)_100%)] p-4">
                 <ul class="space-y-3 text-sm leading-6 text-slate-200">
-                  <For each={insights()}>
+                  <For each={viewMode() === 'flight' ? flightInsights() : spinInsights()}>
                     {(line) => (
                       <li class="flex gap-3">
                         <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />
@@ -327,6 +463,59 @@ function App() {
         </aside>
       </div>
     </main>
+  )
+}
+
+interface SectionHeaderProps {
+  eyebrow: string
+  title: string
+  badge: string
+  badgeTone: 'cyan' | 'amber'
+}
+
+function SectionHeader(props: SectionHeaderProps) {
+  return (
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <p class="font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.32em] text-slate-400">
+          {props.eyebrow}
+        </p>
+        <h2 class="mt-2 font-[var(--font-display)] text-2xl font-medium text-white">
+          {props.title}
+        </h2>
+      </div>
+      <span
+        class="rounded-full border px-3 py-1 font-[var(--font-mono)] text-[0.65rem] uppercase tracking-[0.28em]"
+        classList={{
+          'border-cyan-400/20 bg-cyan-400/10 text-cyan-100': props.badgeTone === 'cyan',
+          'border-amber-300/20 bg-amber-300/10 text-amber-100': props.badgeTone === 'amber',
+        }}
+      >
+        {props.badge}
+      </span>
+    </div>
+  )
+}
+
+interface ModeButtonProps {
+  label: string
+  active: boolean
+  onClick: () => void
+}
+
+function ModeButton(props: ModeButtonProps) {
+  return (
+    <button
+      type="button"
+      class="rounded-full border px-3 py-1.5 font-[var(--font-mono)] text-[0.68rem] uppercase tracking-[0.26em] transition"
+      classList={{
+        'border-cyan-300/25 bg-cyan-300 text-slate-950': props.active,
+        'border-white/10 text-slate-300 hover:border-cyan-300/30 hover:text-white': !props.active,
+      }}
+      onClick={props.onClick}
+    >
+      {props.label}
+    </button>
   )
 }
 
