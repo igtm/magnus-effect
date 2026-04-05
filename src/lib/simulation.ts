@@ -6,6 +6,7 @@ export type PitchPresetId =
   | 'slider'
   | 'curveball'
   | 'changeup'
+  | 'gyroball'
   | 'custom'
 
 export interface Vec3 {
@@ -169,6 +170,20 @@ export const PRESET_DEFINITIONS: PitchPresetDefinition[] = [
       spinRateRpm: 1750,
       axisAzimuthDeg: 90,
       axisElevationDeg: 18,
+      releaseSideOffsetDeg: 0,
+      releaseLiftOffsetDeg: 0,
+    },
+  },
+  {
+    id: 'gyroball',
+    label: 'Gyroball',
+    shortLabel: 'GY',
+    summary: 'Bullet-spin release with muted Magnus break.',
+    defaults: {
+      velocityMph: 89,
+      spinRateRpm: 2450,
+      axisAzimuthDeg: -2,
+      axisElevationDeg: -3,
       releaseSideOffsetDeg: 0,
       releaseLiftOffsetDeg: 0,
     },
@@ -714,18 +729,23 @@ function computeMagnusForce(velocity: Vec3, spinVector: Vec3): Vec3 {
     return zero()
   }
 
-  const spinRatio = (BALL_RADIUS_METERS * spinRate) / speed
-  const liftCoefficient = clampValue(0.09 + 0.6 * spinRatio, 0, 0.35)
-  const spinDirection = normalize(cross(spinVector, velocity))
+  const spinAxis = normalize(spinVector)
+  const travelDirection = normalize(velocity)
+  const forceDirection = cross(spinAxis, travelDirection)
+  const spinEfficiency = magnitude(forceDirection)
 
-  if (magnitude(spinDirection) === 0) {
+  if (spinEfficiency === 0) {
     return zero()
   }
+
+  const effectiveSpinRate = spinRate * spinEfficiency
+  const spinRatio = (BALL_RADIUS_METERS * effectiveSpinRate) / speed
+  const liftCoefficient = clampValue(0.09 + 0.6 * spinRatio, 0, 0.35)
 
   const magnusMagnitude =
     0.5 * AIR_DENSITY * liftCoefficient * BALL_AREA_METERS * speed ** 2
 
-  return scale(spinDirection, magnusMagnitude)
+  return scale(normalize(forceDirection), magnusMagnitude)
 }
 
 function zero(): Vec3 {

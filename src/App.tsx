@@ -108,6 +108,17 @@ function App() {
     })
   }
 
+  const updateAxisInputs = (axisAzimuthDeg: number, axisElevationDeg: number) => {
+    const current = inputs()
+
+    setInputs({
+      ...current,
+      presetId: 'custom',
+      axisAzimuthDeg,
+      axisElevationDeg,
+    })
+  }
+
   return (
     <main class="min-h-screen overflow-hidden bg-[#030917] text-slate-100 xl:h-[100svh] xl:min-h-[100svh]">
       <div class="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(61,158,255,0.18),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(255,155,66,0.12),transparent_24%),linear-gradient(180deg,#030917_0%,#08111d_45%,#030917_100%)]" />
@@ -129,7 +140,7 @@ function App() {
                   <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
                     <Show
                       when={viewMode() === 'flight'}
-                      fallback="Freeze the baseball on a TrackMan-style tilt dial. The amber arrow shows the projected Magnus vector, while the cyan cue slows the spin direction enough to read the tilt."
+                      fallback="Freeze the baseball on a TrackMan-style tilt view. Drag the axis directly, watch the band rotate, and read the outlined Magnus arrow immediately."
                     >
                       Auto-aim keeps the selected pitch finishing at the plate from a catcher-side TrackMan view, while side and loft offsets bias the release without breaking the readout.
                     </Show>
@@ -162,17 +173,8 @@ function App() {
               </div>
             </div>
 
-            <div class="relative flex-1 px-2 pb-2 sm:px-4 sm:pb-4 xl:min-h-0">
-              <Switch>
-                <Match when={viewMode() === 'flight'}>
-                  <PitchScene snapshot={snapshot()} inputs={inputs()} />
-                </Match>
-                <Match when={viewMode() === 'spin-lab'}>
-                  <SpinLabScene snapshot={snapshot()} inputs={inputs()} />
-                </Match>
-              </Switch>
-
-              <div class="pointer-events-none absolute inset-x-6 bottom-5 hidden justify-between gap-4 rounded-[1.4rem] border border-white/10 bg-[#061320]/55 px-5 py-3 backdrop-blur md:flex">
+            <div class="px-5 pb-3 sm:px-7 xl:px-6">
+              <div class="hidden gap-4 rounded-[1.35rem] border border-white/10 bg-[#061320]/55 px-4 py-2.5 backdrop-blur md:grid md:grid-cols-4">
                 <Switch>
                   <Match when={viewMode() === 'flight'}>
                     <LiveStrip
@@ -220,6 +222,21 @@ function App() {
                   </Match>
                 </Switch>
               </div>
+            </div>
+
+            <div class="relative flex-1 px-2 pb-2 sm:px-4 sm:pb-4 xl:min-h-0">
+              <Switch>
+                <Match when={viewMode() === 'flight'}>
+                  <PitchScene snapshot={snapshot()} inputs={inputs()} />
+                </Match>
+                <Match when={viewMode() === 'spin-lab'}>
+                  <SpinLabScene
+                    snapshot={snapshot()}
+                    inputs={inputs()}
+                    onAxisChange={updateAxisInputs}
+                  />
+                </Match>
+              </Switch>
             </div>
           </div>
         </section>
@@ -439,8 +456,8 @@ function App() {
                 <Match when={viewMode() === 'spin-lab'}>
                   <p class="mt-5 text-sm leading-6 text-slate-300">
                     Spin Lab inherits the same speed and axis inputs, then freezes the baseball on
-                    a pitcher-view tilt dial so the Magnus vector and spin direction can be
-                    inspected directly.
+                    a pitcher-view tilt view so the Magnus vector can be read directly while you
+                    drag the axis and even collapse it into gyro.
                   </p>
                 </Match>
               </Switch>

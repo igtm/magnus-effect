@@ -2,6 +2,7 @@ import { createEffect, onCleanup, onMount } from 'solid-js'
 import * as THREE from 'three'
 
 import { createBaseballMaterial } from '../lib/baseballVisuals'
+import { OutlinedArrow } from '../lib/outlinedArrow'
 import type { SimulationInputs, SimulationSnapshot, TrajectorySample, Vec3 } from '../lib/simulation'
 import { resampleTrajectory } from '../lib/simulation'
 
@@ -73,8 +74,8 @@ class PitchSceneController {
   private readonly ballMesh: THREE.Mesh
   private readonly spinAxisLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   private readonly releaseGlow: THREE.Mesh
-  private readonly velocityArrow: THREE.ArrowHelper
-  private readonly magnusArrow: THREE.ArrowHelper
+  private readonly velocityArrow: OutlinedArrow
+  private readonly magnusArrow: OutlinedArrow
   private readonly zoneBox: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>
   private readonly zoneGrid: THREE.LineSegments<
     THREE.BufferGeometry,
@@ -96,10 +97,10 @@ class PitchSceneController {
   constructor(container: HTMLDivElement, canvas: HTMLCanvasElement) {
     this.container = container
     this.scene = new THREE.Scene()
-    this.camera = new THREE.PerspectiveCamera(24, 1, 0.1, 80)
-    this.camera.position.set(20.9, 0, 1.18)
+    this.camera = new THREE.PerspectiveCamera(23, 1, 0.1, 80)
+    this.camera.position.set(20.9, 0, 1.02)
     this.camera.up.set(0, 0, 1)
-    this.camera.lookAt(10.6, 0, 1.06)
+    this.camera.lookAt(10.6, 0, 0.58)
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -129,22 +130,16 @@ class PitchSceneController {
     const { mesh: releaseGlow, material: releaseGlowMaterial } = this.createReleaseGlow()
     this.releaseGlow = releaseGlow
     this.releaseGlowMaterial = releaseGlowMaterial
-    this.velocityArrow = new THREE.ArrowHelper(
-      new THREE.Vector3(1, 0, 0),
-      new THREE.Vector3(),
-      0.75,
-      0x6ee7f9,
-      0.18,
-      0.1,
-    )
-    this.magnusArrow = new THREE.ArrowHelper(
-      new THREE.Vector3(0, 0, 1),
-      new THREE.Vector3(),
-      0.7,
-      0xffb347,
-      0.2,
-      0.11,
-    )
+    this.velocityArrow = new OutlinedArrow({
+      color: 0x38bdf8,
+      shaftRadius: 0.024,
+      headRadius: 0.08,
+    })
+    this.magnusArrow = new OutlinedArrow({
+      color: 0xf59e0b,
+      shaftRadius: 0.028,
+      headRadius: 0.094,
+    })
 
     this.zoneBox = this.createStrikeZone()
     this.zoneGrid = this.createStrikeZoneGrid()
@@ -193,6 +188,8 @@ class PitchSceneController {
     this.spinAxisLine.material.dispose()
     this.releaseGlow.geometry.dispose()
     this.releaseGlowMaterial.dispose()
+    this.velocityArrow.dispose()
+    this.magnusArrow.dispose()
 
     this.zoneBox.geometry.dispose()
     this.zoneBox.material.dispose()
@@ -250,8 +247,8 @@ class PitchSceneController {
     this.scene.add(ground, lane, leftBox, rightBox, plate, this.zoneBox, this.zoneGrid, this.guideFan)
     this.scene.add(this.releaseGlow)
     this.scene.add(this.ballGroup)
-    this.scene.add(this.velocityArrow)
-    this.scene.add(this.magnusArrow)
+    this.scene.add(this.velocityArrow.group)
+    this.scene.add(this.magnusArrow.group)
   }
 
   private createBallMesh() {
@@ -512,15 +509,15 @@ class PitchSceneController {
     const speed = sample.velocity.length()
     const magnus = sample.magnusForce.length()
 
-    this.velocityArrow.position.copy(sample.position)
+    this.velocityArrow.setPosition(sample.position)
     this.velocityArrow.setDirection(sample.velocity.clone().normalize())
-    this.velocityArrow.setLength(0.34 + speed * 0.018, 0.18, 0.1)
+    this.velocityArrow.setLength(0.12 + speed * 0.008, 0.1)
 
-    this.magnusArrow.position.copy(sample.position)
+    this.magnusArrow.setPosition(sample.position)
     this.magnusArrow.setDirection(
       magnus > 0 ? sample.magnusForce.clone().normalize() : new THREE.Vector3(0, 0, 1),
     )
-    this.magnusArrow.setLength(0.28 + magnus * 6.4, 0.18, 0.1)
+    this.magnusArrow.setLength(0.1 + magnus * 1.75, 0.11)
   }
 }
 

@@ -75,11 +75,27 @@ describe('simulatePitch', () => {
   })
 
   it('keeps every built-in preset reaching the plate with auto-aim', () => {
-    for (const presetId of ['four-seam', 'sinker', 'slider', 'curveball', 'changeup'] as const) {
+    for (const presetId of [
+      'four-seam',
+      'sinker',
+      'slider',
+      'curveball',
+      'changeup',
+      'gyroball',
+    ] as const) {
       const snapshot = simulatePitch(getPresetInputs(presetId, 'RHP'))
       expect(snapshot.reachesPlate).toBe(true)
       expect(snapshot.platePosition.x).toBeGreaterThan(18.43)
       expect(snapshot.platePosition.z).toBeGreaterThan(0.1)
     }
+  })
+
+  it('keeps gyroball movement muted versus a four-seam', () => {
+    const gyroball = simulatePitch(getPresetInputs('gyroball', 'RHP'))
+    const fourSeam = simulatePitch(getPresetInputs('four-seam', 'RHP'))
+
+    expect(gyroball.metrics.magnusForceN).toBeLessThan(fourSeam.metrics.magnusForceN * 0.4)
+    expect(Math.abs(gyroball.metrics.horizontalBreakIn)).toBeLessThan(6)
+    expect(Math.abs(gyroball.metrics.verticalBreakIn)).toBeLessThan(6)
   })
 })
