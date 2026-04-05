@@ -1,0 +1,116 @@
+.aurora-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-position: center;
+  background-size: 80px 80px;
+  mask-image: radial-gradient(circle at center, black 35%, transparent 92%);
+}
+
+.preset-chip {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  padding: 1rem;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.preset-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(103, 232, 249, 0.34);
+  box-shadow: 0 14px 28px rgba(2, 8, 23, 0.22);
+}
+
+.preset-chip-active {
+  border-color: rgba(103, 232, 249, 0.42);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.18) 0%, rgba(255, 255, 255, 0.03) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 18px 35px rgba(8, 47, 73, 0.28);
+}
+
+.metric-meter {
+  height: 0.4rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.metric-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.9), rgba(245, 158, 11, 0.98));
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.4);
+}
+
+.pitch-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(34, 211, 238, 0.95) 0%,
+      rgba(34, 211, 238, 0.95) var(--slider-fill),
+      rgba(255, 255, 255, 0.08) var(--slider-fill),
+      rgba(255, 255, 255, 0.08) 100%
+    );
+  outline: none;
+}
+
+.pitch-slider::-webkit-slider-runnable-track {
+  height: 1rem;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.pitch-slider::-moz-range-track {
+  height: 1rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+}
+
+.pitch-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  height: 1.7rem;
+  width: 1.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), rgba(203, 213, 225, 0.82));
+  box-shadow:
+    0 0 0 8px rgba(6, 19, 32, 0.36),
+    0 10px 24px rgba(8, 145, 178, 0.32);
+  cursor: pointer;
+}
+
+.pitch-slider::-moz-range-thumb {
+  height: 1.7rem;
+  width: 1.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), rgba(203, 213, 225, 0.82));
+  box-shadow:
+    0 0 0 8px rgba(6, 19, 32, 0.36),
+    0 10px 24px rgba(8, 145, 178, 0.32);
+  cursor: pointer;
+}
+
+.pitch-scene {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -80px 120px rgba(2, 6, 23, 0.4);
+}
