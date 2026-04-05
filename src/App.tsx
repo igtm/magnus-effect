@@ -140,7 +140,7 @@ function App() {
                   <p class="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
                     <Show
                       when={viewMode() === 'flight'}
-                      fallback="Freeze the baseball on a TrackMan-style tilt view. Drag the axis directly, watch the band rotate, and read the outlined Magnus arrow immediately."
+                      fallback="Freeze the baseball on a catcher-view TrackMan-style tilt view. Drag the axis directly, watch the band rotate, and read the outlined Magnus arrow immediately."
                     >
                       Auto-aim keeps the selected pitch finishing at the plate from a catcher-side TrackMan view, while side and loft offsets bias the release without breaking the readout.
                     </Show>
@@ -456,7 +456,7 @@ function App() {
                 <Match when={viewMode() === 'spin-lab'}>
                   <p class="mt-5 text-sm leading-6 text-slate-300">
                     Spin Lab inherits the same speed and axis inputs, then freezes the baseball on
-                    a pitcher-view tilt view so the Magnus vector can be read directly while you
+                    a catcher-view tilt view so the Magnus vector can be read directly while you
                     drag the axis and even collapse it into gyro.
                   </p>
                 </Match>
@@ -679,13 +679,13 @@ function getMagnusVectorHint(
 
   if (Math.abs(force.y) < Math.abs(force.z) * 0.35) {
     return force.z >= 0
-      ? 'The displayed arrow is lifting the pitch in the pitcher view.'
-      : 'The displayed arrow is driving the pitch down in the pitcher view.'
+      ? 'The displayed arrow is lifting the pitch in the catcher view.'
+      : 'The displayed arrow is driving the pitch down in the catcher view.'
   }
 
   return `${force.z >= 0 ? 'Upward' : 'Downward'} force with ${
     armSideForce >= 0 ? 'arm-side' : 'glove-side'
-  } bias in the pitcher view.`
+  } bias in the catcher view.`
 }
 
 export default App

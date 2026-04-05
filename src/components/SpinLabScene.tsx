@@ -80,7 +80,7 @@ function SpinLabScene(props: SpinLabSceneProps) {
         <div class="font-[var(--font-mono)] text-[0.62rem] uppercase tracking-[0.28em] text-slate-500">
           Ball Spin
         </div>
-        <div class="mt-1 font-[var(--font-display)] text-lg text-slate-900">Pitcher&apos;s View</div>
+        <div class="mt-1 font-[var(--font-display)] text-lg text-slate-900">Catcher&apos;s View</div>
       </div>
       <div class="pointer-events-none absolute right-4 top-4 rounded-full border border-slate-300/90 bg-white/78 px-3 py-1 font-[var(--font-mono)] text-[0.62rem] uppercase tracking-[0.22em] text-slate-600 shadow-[0_10px_25px_rgba(15,23,42,0.08)] sm:right-6 sm:top-5">
         Drag Axis
@@ -344,7 +344,8 @@ class SpinLabSceneController {
     )
     this.currentState.speedMph = lerp(this.currentState.speedMph, this.targetState.speedMph, 0.14)
 
-    const projectedAxis = new THREE.Vector3(0, this.currentState.spinAxis.y, this.currentState.spinAxis.z)
+    const displaySpinAxis = toSpinLabDisplayVector(this.currentState.spinAxis)
+    const projectedAxis = new THREE.Vector3(0, displaySpinAxis.y, displaySpinAxis.z)
     if (projectedAxis.lengthSq() < 1e-6) {
       projectedAxis.set(0, 0, 1)
     } else {
@@ -362,18 +363,15 @@ class SpinLabSceneController {
 
     const spinRps = getVisualSpinRps(this.currentState.spinRateRpm)
     const spinAngle = (now / 1000) * spinRps * Math.PI * 2
-    this.ballMesh.quaternion.setFromAxisAngle(this.currentState.spinAxis, spinAngle)
+    this.ballMesh.quaternion.setFromAxisAngle(displaySpinAxis, spinAngle)
     this.bandGroup.quaternion.setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),
-      this.currentState.spinAxis.clone().normalize(),
+      displaySpinAxis.clone().normalize(),
     )
     this.bandMesh.rotation.set(0, spinAngle, 0)
 
-    const projectedMagnus = new THREE.Vector3(
-      0,
-      this.currentState.magnusForce.y,
-      this.currentState.magnusForce.z,
-    )
+    const displayMagnus = toSpinLabDisplayVector(this.currentState.magnusForce)
+    const projectedMagnus = new THREE.Vector3(0, displayMagnus.y, displayMagnus.z)
     const forceMagnitude = projectedMagnus.length()
     const forceDirection =
       forceMagnitude < 1e-6 ? new THREE.Vector3(0, 0, 1) : projectedMagnus.clone().normalize()
@@ -390,7 +388,7 @@ class SpinLabSceneController {
       return
     }
 
-    let y = localPoint.y / DRAG_RADIUS
+    let y = -localPoint.y / DRAG_RADIUS
     let z = localPoint.z / DRAG_RADIUS
     const radialLength = Math.hypot(y, z)
 
@@ -401,7 +399,8 @@ class SpinLabSceneController {
 
     const signX = Math.sign(this.targetState?.spinAxis.x ?? this.currentState?.spinAxis.x ?? 1) || 1
     const x = Math.sqrt(Math.max(0, 1 - y ** 2 - z ** 2)) * signX
-    const nextAxis = new THREE.Vector3(x, y, z).normalize()
+    const nextDisplayAxis = new THREE.Vector3(x, y, z).normalize()
+    const nextAxis = toSpinLabDisplayVector(nextDisplayAxis)
     const nextMagnus = estimateMagnusForce(
       nextAxis,
       this.targetState?.relativeWind ?? this.currentState?.relativeWind ?? new THREE.Vector3(-1, 0, 0),
@@ -468,6 +467,10 @@ function axisToAngles(axis: THREE.Vector3) {
       (Math.atan2(normalized.z, Math.hypot(normalized.x, normalized.y)) * 180) /
       Math.PI,
   }
+}
+
+function toSpinLabDisplayVector(vector: THREE.Vector3) {
+  return new THREE.Vector3(vector.x, -vector.y, vector.z)
 }
 
 function estimateMagnusForce(

@@ -431,8 +431,8 @@ export function describeSpinLab(snapshot: SimulationSnapshot): string[] {
   )
   notes.push(
     snapshot.referenceMagnusForce.z >= 0
-      ? 'In the pitcher view, the highlighted Magnus arrow points up because spin is adding carry.'
-      : 'In the pitcher view, the highlighted Magnus arrow points down because spin is adding drop.',
+      ? 'In the catcher view, the highlighted Magnus arrow points up because spin is adding carry.'
+      : 'In the catcher view, the highlighted Magnus arrow points down because spin is adding drop.',
   )
 
   if (visibleSpinAxis > 0.78) {
@@ -444,7 +444,7 @@ export function describeSpinLab(snapshot: SimulationSnapshot): string[] {
   }
 
   if (projectedMagnus < snapshot.metrics.magnusForceN * 0.55) {
-    notes.push('A noticeable share of the force is still aligned with travel, so the pitcher-view vector stays compact.')
+    notes.push('A noticeable share of the force is still aligned with travel, so the catcher-view vector stays compact.')
   }
 
   if (snapshot.metrics.spinEfficiencyPct > 90) {
