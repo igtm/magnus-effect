@@ -8,8 +8,8 @@ import type { SimulationInputs, SimulationSnapshot, Vec3 } from '../lib/simulati
 const FORCE_COLOR = new THREE.Color('#38bdf8')
 const CAMERA_HEIGHT = 5.6
 const LAB_OFFSET_Z = 0.7
-const BAND_INNER_RADIUS = 0.46
-const BAND_OUTER_RADIUS = 0.56
+const BAND_INNER_RADIUS = 0.42
+const BAND_OUTER_RADIUS = 0.66
 const DRAG_RADIUS = 1.55
 const MPH_TO_METERS_PER_SECOND = 0.44704
 const RPM_TO_RAD_PER_SECOND = (Math.PI * 2) / 60
@@ -513,7 +513,7 @@ function clamp01(value: number): number {
 function createSpinBandMaterial() {
   const canvas = document.createElement('canvas')
   canvas.width = 2048
-  canvas.height = 256
+  canvas.height = 320
 
   const context = canvas.getContext('2d')
 
@@ -524,24 +524,24 @@ function createSpinBandMaterial() {
   context.clearRect(0, 0, canvas.width, canvas.height)
 
   const ribbon = context.createLinearGradient(0, 0, 0, canvas.height)
-  ribbon.addColorStop(0, 'rgba(56, 189, 248, 0.12)')
-  ribbon.addColorStop(0.18, 'rgba(56, 189, 248, 0.92)')
-  ribbon.addColorStop(0.5, 'rgba(125, 211, 252, 0.98)')
-  ribbon.addColorStop(0.82, 'rgba(56, 189, 248, 0.92)')
-  ribbon.addColorStop(1, 'rgba(56, 189, 248, 0.12)')
+  ribbon.addColorStop(0, 'rgba(56, 189, 248, 0.22)')
+  ribbon.addColorStop(0.12, 'rgba(56, 189, 248, 0.96)')
+  ribbon.addColorStop(0.5, 'rgba(125, 211, 252, 1)')
+  ribbon.addColorStop(0.88, 'rgba(56, 189, 248, 0.96)')
+  ribbon.addColorStop(1, 'rgba(56, 189, 248, 0.22)')
   context.fillStyle = ribbon
-  context.fillRect(0, 36, canvas.width, canvas.height - 72)
+  context.fillRect(0, 28, canvas.width, canvas.height - 56)
 
   context.strokeStyle = 'rgba(224, 242, 254, 0.98)'
-  context.lineWidth = 14
+  context.lineWidth = 18
   context.lineCap = 'round'
   context.lineJoin = 'round'
 
-  for (let x = 92; x < canvas.width + 92; x += 168) {
+  for (let x = 108; x < canvas.width + 108; x += 182) {
     context.beginPath()
-    context.moveTo(x - 28, 82)
-    context.lineTo(x + 18, 128)
-    context.lineTo(x - 28, 174)
+    context.moveTo(x - 34, 106)
+    context.lineTo(x + 24, 160)
+    context.lineTo(x - 34, 214)
     context.stroke()
   }
 
@@ -554,6 +554,7 @@ function createSpinBandMaterial() {
     transparent: true,
     side: THREE.DoubleSide,
     depthWrite: false,
+    opacity: 0.98,
   })
 
   return { texture, material }

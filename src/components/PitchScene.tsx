@@ -72,6 +72,7 @@ class PitchSceneController {
   private readonly trajectoryMaterial: THREE.MeshPhysicalMaterial
   private readonly ballGroup: THREE.Group
   private readonly ballMesh: THREE.Mesh
+  private readonly ballFillLight: THREE.PointLight
   private readonly spinAxisLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   private readonly releaseGlow: THREE.Mesh
   private readonly velocityArrow: OutlinedArrow
@@ -126,6 +127,8 @@ class PitchSceneController {
 
     this.ballGroup = new THREE.Group()
     this.ballMesh = this.createBallMesh()
+    this.ballFillLight = new THREE.PointLight(0xffffff, 2.4, 2.6, 2)
+    this.ballFillLight.position.set(-0.16, 0.22, 0.22)
     this.spinAxisLine = this.createSpinAxisLine()
     const { mesh: releaseGlow, material: releaseGlowMaterial } = this.createReleaseGlow()
     this.releaseGlow = releaseGlow
@@ -241,6 +244,7 @@ class PitchSceneController {
     const plate = this.createHomePlate()
 
     this.ballGroup.add(this.ballMesh)
+    this.ballGroup.add(this.ballFillLight)
     this.ballGroup.add(this.spinAxisLine)
 
     this.scene.add(ambient, hemisphere, key, rim)
