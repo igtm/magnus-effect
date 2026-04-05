@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 
 const SEAM_COLOR = '#b91c1c'
-const BASE_LEATHER = '#fbf7f0'
+const BASE_LEATHER = '#f6f1e8'
 
 export function createBaseballMaterial(maxAnisotropy: number): THREE.MeshPhysicalMaterial {
   const texture = createBallTexture()
@@ -10,15 +10,12 @@ export function createBaseballMaterial(maxAnisotropy: number): THREE.MeshPhysica
 
   return new THREE.MeshPhysicalMaterial({
     map: texture,
-    color: new THREE.Color('#fffdf8'),
     roughness: 0.62,
     metalness: 0.03,
     clearcoat: 0.9,
     clearcoatRoughness: 0.18,
     sheen: 0.5,
     sheenColor: new THREE.Color('#fff8f0'),
-    emissive: new THREE.Color('#6e6257'),
-    emissiveIntensity: 0.14,
   })
 }
 
@@ -34,14 +31,14 @@ function createBallTexture(): THREE.CanvasTexture {
   }
 
   const background = context.createLinearGradient(0, 0, canvas.width, canvas.height)
-  background.addColorStop(0, '#fffdf8')
+  background.addColorStop(0, '#fff9f1')
   background.addColorStop(0.45, BASE_LEATHER)
-  background.addColorStop(1, '#f8f1e4')
+  background.addColorStop(1, '#f0e7d6')
   context.fillStyle = background
   context.fillRect(0, 0, canvas.width, canvas.height)
 
-  for (let index = 0; index < 1400; index += 1) {
-    context.fillStyle = `rgba(131, 91, 54, ${0.004 + Math.random() * 0.014})`
+  for (let index = 0; index < 2400; index += 1) {
+    context.fillStyle = `rgba(131, 91, 54, ${0.01 + Math.random() * 0.035})`
     context.beginPath()
     context.arc(
       Math.random() * canvas.width,

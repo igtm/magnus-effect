@@ -8,8 +8,7 @@ import type { SimulationInputs, SimulationSnapshot, Vec3 } from '../lib/simulati
 const FORCE_COLOR = new THREE.Color('#38bdf8')
 const CAMERA_HEIGHT = 5.6
 const LAB_OFFSET_Z = 0.7
-const BAND_INNER_RADIUS = 0.42
-const BAND_OUTER_RADIUS = 0.66
+const BAND_RADIUS = 0.552
 const DRAG_RADIUS = 1.55
 const MPH_TO_METERS_PER_SECOND = 0.44704
 const RPM_TO_RAD_PER_SECOND = (Math.PI * 2) / 60
@@ -119,7 +118,7 @@ class SpinLabSceneController {
   private readonly forceArrow: OutlinedArrow
   private readonly bandGroup = new THREE.Group()
   private readonly bandMesh: THREE.Mesh<
-    THREE.RingGeometry,
+    THREE.SphereGeometry,
     THREE.MeshBasicMaterial
   >
   private readonly bandTexture: THREE.CanvasTexture
@@ -180,7 +179,7 @@ class SpinLabSceneController {
     const { texture, material } = createSpinBandMaterial()
     this.bandTexture = texture
     this.bandMesh = new THREE.Mesh(
-      new THREE.RingGeometry(BAND_INNER_RADIUS, BAND_OUTER_RADIUS, 128),
+      new THREE.SphereGeometry(BAND_RADIUS, 64, 64),
       material,
     )
 
@@ -513,7 +512,7 @@ function clamp01(value: number): number {
 function createSpinBandMaterial() {
   const canvas = document.createElement('canvas')
   canvas.width = 2048
-  canvas.height = 320
+  canvas.height = 1024
 
   const context = canvas.getContext('2d')
 
@@ -523,14 +522,20 @@ function createSpinBandMaterial() {
 
   context.clearRect(0, 0, canvas.width, canvas.height)
 
-  const ribbon = context.createLinearGradient(0, 0, 0, canvas.height)
-  ribbon.addColorStop(0, 'rgba(56, 189, 248, 0.22)')
-  ribbon.addColorStop(0.12, 'rgba(56, 189, 248, 0.96)')
+  const bandTop = 384
+  const bandBottom = 640
+  const ribbon = context.createLinearGradient(0, bandTop, 0, bandBottom)
+  ribbon.addColorStop(0, 'rgba(56, 189, 248, 0)')
+  ribbon.addColorStop(0.18, 'rgba(56, 189, 248, 0.96)')
   ribbon.addColorStop(0.5, 'rgba(125, 211, 252, 1)')
-  ribbon.addColorStop(0.88, 'rgba(56, 189, 248, 0.96)')
-  ribbon.addColorStop(1, 'rgba(56, 189, 248, 0.22)')
+  ribbon.addColorStop(0.82, 'rgba(56, 189, 248, 0.96)')
+  ribbon.addColorStop(1, 'rgba(56, 189, 248, 0)')
   context.fillStyle = ribbon
-  context.fillRect(0, 28, canvas.width, canvas.height - 56)
+  context.fillRect(0, bandTop, canvas.width, bandBottom - bandTop)
+
+  context.fillStyle = 'rgba(186, 230, 253, 0.32)'
+  context.fillRect(0, bandTop + 20, canvas.width, 12)
+  context.fillRect(0, bandBottom - 32, canvas.width, 12)
 
   context.strokeStyle = 'rgba(224, 242, 254, 0.98)'
   context.lineWidth = 18
@@ -539,9 +544,9 @@ function createSpinBandMaterial() {
 
   for (let x = 108; x < canvas.width + 108; x += 182) {
     context.beginPath()
-    context.moveTo(x - 34, 106)
-    context.lineTo(x + 24, 160)
-    context.lineTo(x - 34, 214)
+    context.moveTo(x - 34, 428)
+    context.lineTo(x + 24, 512)
+    context.lineTo(x - 34, 596)
     context.stroke()
   }
 
@@ -552,7 +557,7 @@ function createSpinBandMaterial() {
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     depthWrite: false,
     opacity: 0.98,
   })

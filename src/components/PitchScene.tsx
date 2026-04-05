@@ -2,7 +2,6 @@ import { createEffect, onCleanup, onMount } from 'solid-js'
 import * as THREE from 'three'
 
 import { createBaseballMaterial } from '../lib/baseballVisuals'
-import { OutlinedArrow } from '../lib/outlinedArrow'
 import type { SimulationInputs, SimulationSnapshot, TrajectorySample, Vec3 } from '../lib/simulation'
 import { resampleTrajectory } from '../lib/simulation'
 
@@ -72,11 +71,10 @@ class PitchSceneController {
   private readonly trajectoryMaterial: THREE.MeshPhysicalMaterial
   private readonly ballGroup: THREE.Group
   private readonly ballMesh: THREE.Mesh
-  private readonly ballFillLight: THREE.PointLight
   private readonly spinAxisLine: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   private readonly releaseGlow: THREE.Mesh
-  private readonly velocityArrow: OutlinedArrow
-  private readonly magnusArrow: OutlinedArrow
+  private readonly velocityArrow: THREE.ArrowHelper
+  private readonly magnusArrow: THREE.ArrowHelper
   private readonly zoneBox: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>
   private readonly zoneGrid: THREE.LineSegments<
     THREE.BufferGeometry,
@@ -127,22 +125,26 @@ class PitchSceneController {
 
     this.ballGroup = new THREE.Group()
     this.ballMesh = this.createBallMesh()
-    this.ballFillLight = new THREE.PointLight(0xffffff, 2.4, 2.6, 2)
-    this.ballFillLight.position.set(-0.16, 0.22, 0.22)
     this.spinAxisLine = this.createSpinAxisLine()
     const { mesh: releaseGlow, material: releaseGlowMaterial } = this.createReleaseGlow()
     this.releaseGlow = releaseGlow
     this.releaseGlowMaterial = releaseGlowMaterial
-    this.velocityArrow = new OutlinedArrow({
-      color: 0x38bdf8,
-      shaftRadius: 0.024,
-      headRadius: 0.08,
-    })
-    this.magnusArrow = new OutlinedArrow({
-      color: 0xf59e0b,
-      shaftRadius: 0.028,
-      headRadius: 0.094,
-    })
+    this.velocityArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(),
+      0.75,
+      0x6ee7f9,
+      0.18,
+      0.1,
+    )
+    this.magnusArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(),
+      0.7,
+      0xffb347,
+      0.2,
+      0.11,
+    )
 
     this.zoneBox = this.createStrikeZone()
     this.zoneGrid = this.createStrikeZoneGrid()
@@ -191,8 +193,8 @@ class PitchSceneController {
     this.spinAxisLine.material.dispose()
     this.releaseGlow.geometry.dispose()
     this.releaseGlowMaterial.dispose()
-    this.velocityArrow.dispose()
-    this.magnusArrow.dispose()
+    disposeArrowHelper(this.velocityArrow)
+    disposeArrowHelper(this.magnusArrow)
 
     this.zoneBox.geometry.dispose()
     this.zoneBox.material.dispose()
@@ -244,15 +246,14 @@ class PitchSceneController {
     const plate = this.createHomePlate()
 
     this.ballGroup.add(this.ballMesh)
-    this.ballGroup.add(this.ballFillLight)
     this.ballGroup.add(this.spinAxisLine)
 
     this.scene.add(ambient, hemisphere, key, rim)
     this.scene.add(ground, lane, leftBox, rightBox, plate, this.zoneBox, this.zoneGrid, this.guideFan)
     this.scene.add(this.releaseGlow)
     this.scene.add(this.ballGroup)
-    this.scene.add(this.velocityArrow.group)
-    this.scene.add(this.magnusArrow.group)
+    this.scene.add(this.velocityArrow)
+    this.scene.add(this.magnusArrow)
   }
 
   private createBallMesh() {
@@ -513,15 +514,15 @@ class PitchSceneController {
     const speed = sample.velocity.length()
     const magnus = sample.magnusForce.length()
 
-    this.velocityArrow.setPosition(sample.position)
+    this.velocityArrow.position.copy(sample.position)
     this.velocityArrow.setDirection(sample.velocity.clone().normalize())
-    this.velocityArrow.setLength(0.12 + speed * 0.008, 0.1)
+    this.velocityArrow.setLength(0.12 + speed * 0.008, 0.1, 0.08)
 
-    this.magnusArrow.setPosition(sample.position)
+    this.magnusArrow.position.copy(sample.position)
     this.magnusArrow.setDirection(
       magnus > 0 ? sample.magnusForce.clone().normalize() : new THREE.Vector3(0, 0, 1),
     )
-    this.magnusArrow.setLength(0.1 + magnus * 1.75, 0.11)
+    this.magnusArrow.setLength(0.1 + magnus * 1.75, 0.11, 0.08)
   }
 }
 
@@ -637,6 +638,23 @@ function getFlightVisualSpinRps(spinRateRpm: number): number {
   }
 
   return 1 + Math.min(spinRateRpm / 3200, 1) * 4.2
+}
+
+function disposeArrowHelper(arrow: THREE.ArrowHelper) {
+  arrow.line.geometry.dispose()
+  arrow.cone.geometry.dispose()
+
+  if (Array.isArray(arrow.line.material)) {
+    arrow.line.material.forEach((material) => material.dispose())
+  } else {
+    arrow.line.material.dispose()
+  }
+
+  if (Array.isArray(arrow.cone.material)) {
+    arrow.cone.material.forEach((material) => material.dispose())
+  } else {
+    arrow.cone.material.dispose()
+  }
 }
 
 export default PitchScene
