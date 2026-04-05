@@ -495,7 +495,7 @@ class PitchSceneController {
     const sample = sampleStateAtProgress(state, normalizedProgress)
     const spinAxis = state.spinAxis.clone().normalize()
     const visualSpinRps = getFlightVisualSpinRps(state.spinRateRpm)
-    const angle = ((now - this.pitchLoopStartTime) / 1000) * visualSpinRps * Math.PI * 2
+    const angle = -((now - this.pitchLoopStartTime) / 1000) * visualSpinRps * Math.PI * 2
 
     this.ballGroup.position.copy(sample.position)
     this.ballMesh.quaternion.setFromAxisAngle(spinAxis, angle)

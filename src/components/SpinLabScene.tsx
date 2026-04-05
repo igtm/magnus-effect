@@ -362,7 +362,7 @@ class SpinLabSceneController {
     this.spinAxisLine.geometry.attributes.position.needsUpdate = true
 
     const spinRps = getVisualSpinRps(this.currentState.spinRateRpm)
-    const spinAngle = (now / 1000) * spinRps * Math.PI * 2
+    const spinAngle = -((now / 1000) * spinRps * Math.PI * 2)
     this.ballMesh.quaternion.setFromAxisAngle(displaySpinAxis, spinAngle)
     this.bandGroup.quaternion.setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),
